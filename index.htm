@@ -276,8 +276,8 @@ const MVPS=["Lionel Messi (Argentina)","Kylian Mbappé (Francia)","Lamine Yamal 
 const JOVENES=["Lamine Yamal (España)","Désiré Doué (Francia)","Warren Zaïre-Emery (Francia)","Arda Güler (Turquía)","Estêvão (Brasil)","Endrick (Brasil)","Kenan Yıldız (Turquía)","Pau Cubarsí (España)","Geovany Quenda (Portugal)","João Neves (Portugal)","Gilberto Mora (México)","Nico Paz (Argentina)"];
 
 /* ===================== SUPABASE ===================== */
-const SB_URL = "PEGA_TU_PROJECT_URL_AQUI";
-const SB_KEY = "PEGA_TU_ANON_PUBLIC_KEY_AQUI";
+const SB_URL = "https://uxdjqztytlotpkeaiqxb.supabase.co";
+const SB_KEY = "sb_publishable_X-lPIxsp3SBODnV8-f5lrA_5hKZXejw";
 const MEM={}; let sb=null;
 const SB_ON=/^https:\/\/.+\.supabase\.co/.test(SB_URL)&&SB_KEY.length>20;
 try{ if(SB_ON&&window.supabase){ sb=window.supabase.createClient(SB_URL,SB_KEY); } }catch(e){ sb=null; }
