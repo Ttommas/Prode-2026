@@ -408,13 +408,13 @@ const store={
 let CFG={points:{...DEFAULT_POINTS},penalty:60,orgCode:""};
 let ACT={scores:{},rounds:{r16:[],qf:[],sf:[],fin:[]},champ:"",goleador:"",mvp:"",joven:"",bracket:{}};
 let PLAYERS=[],ME=null,ORG=false,VIEW="home",PRON="marc",openDetail=null;
-let TIERVIEW="presente",TIER_SEL=null,TIERS=null,TIERS_JSON="";
+let TIERVIEW="presente",TIER_SEL=null,TIER_WHO=null,TIER_SEED_MAP=null;
 
 function uid(){return Math.random().toString(36).slice(2,9);}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1600);}
 function esc(s){return (s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
 function flag(t){const c=CODE[t];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="" loading="lazy">`:`<span class="flag noflag"></span>`;}
-function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",original:p.original||null};}
+function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",tiers:p.tiers||{},original:p.original||null};}
 
 /* ===================== RESULTADOS EN VIVO (auto · fuente: ESPN) ===================== */
 const LIVE_BASE="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
@@ -714,7 +714,6 @@ async function loadAll(){
   const a=await store.get("act");if(a){try{ACT=Object.assign(ACT,JSON.parse(a));ACT.rounds=Object.assign({r16:[],qf:[],sf:[],fin:[]},ACT.rounds);ACT.bracket=ACT.bracket||{};}catch(e){}}
   const fx=await store.get("fixmeta");if(fx){try{FIXMETA=JSON.parse(fx)||{};FIXMETA_JSON=fx;}catch(e){FIXMETA={};}}
   const gg=await store.get("goals");if(gg){try{GOALS=JSON.parse(gg)||{};GOALS_JSON=gg;}catch(e){GOALS={};}}
-  try{await ensureTiers();TIERS_JSON=JSON.stringify(TIERS);}catch(e){}
   await loadPlayers();
   const m=await store.getMe();ME=(m&&m.id)?m.id:null;
 }
@@ -1155,35 +1154,42 @@ const TIER_SEED={
   }
 };
 function buildTiers(){const out={};TIER_CATS.forEach(cat=>{const map={};const seed=TIER_SEED[cat.key]||{};ALLTEAMS.forEach(t=>{map[t]="D";});["S","A","B","C"].forEach(tk=>(seed[tk]||[]).forEach(t=>{if(map[t]!=null)map[t]=tk;}));out[cat.key]=map;});return out;}
-async function ensureTiers(){if(TIERS)return;const raw=await store.get("tiers");if(raw){try{TIERS=JSON.parse(raw);}catch(e){}}if(!TIERS)TIERS=buildTiers();
-  // completar categorías o equipos faltantes con el seed
-  const base=buildTiers();TIER_CATS.forEach(c=>{TIERS[c.key]=Object.assign({},base[c.key],TIERS[c.key]||{});});}
-async function saveTiers(){const j=JSON.stringify(TIERS);if(j!==TIERS_JSON){TIERS_JSON=j;await store.set("tiers",j);}}
+function seedMap(){if(!TIER_SEED_MAP)TIER_SEED_MAP=buildTiers();return TIER_SEED_MAP;}
+function tiersOf(p,catKey){const base=seedMap()[catKey]||{};const ov=(p&&p.tiers&&p.tiers[catKey])||{};return Object.assign({},base,ov);}
 function renderTier(){
   const v=document.getElementById("v-tier");
-  if(!TIERS){ensureTiers().then(render);v.innerHTML='<div class="band" data-c="magenta"><div class="be">04 · Grandeza</div><h2>Tier list mundialista</h2></div><p class="sub" style="padding:14px">Cargando…</p>';return;}
+  if(!TIER_WHO||!PLAYERS.some(p=>p.id===TIER_WHO))TIER_WHO=ME;
+  const who=PLAYERS.find(p=>p.id===TIER_WHO)||me();
+  const mine=who&&who.id===ME;
   const cat=TIER_CATS.find(c=>c.key===TIERVIEW)||TIER_CATS[0];
-  const map=TIERS[cat.key]||{};
-  let h=`<div class="band" data-c="magenta"><div class="be">04 · Grandeza</div><h2>Tier list mundialista</h2><p>Las 48 selecciones ordenadas por grandeza deportiva. ${ORG?"Como organizador podés reacomodarlas.":"La define el organizador del grupo."}</p><div class="bignum">48</div></div>`;
+  const map=tiersOf(who,cat.key);
+  let h=`<div class="band" data-c="magenta"><div class="be">03 · Grandeza</div><h2>Tier list mundialista</h2><p>Las 48 selecciones por grandeza deportiva. Armá la tuya y mirá las del resto.</p><div class="bignum">48</div></div>`;
+  // selector de jugador
+  h+=`<div class="tcats">`+PLAYERS.map(p=>`<button class="tcat ${p.id===TIER_WHO?"on":""}" data-who="${p.id}">${p.id===ME?"La mía":esc(p.name)}</button>`).join("")+`</div>`;
+  // categorías
   h+=`<div class="tcats">`+TIER_CATS.map(c=>`<button class="tcat ${c.key===TIERVIEW?"on":""}" data-cat="${c.key}">${c.name}</button>`).join("")+`</div>`;
-  h+=`<p class="hint-row">${cat.desc}</p>`;
-  if(ORG&&TIER_SEL)h+=`<div class="tmove">Mover <b>${flag(TIER_SEL)} ${TIER_SEL}</b> a: ${TIER_DEFS.map(t=>`<button class="tmb" data-to="${t.k}" style="border-color:${t.c};color:${t.c}">${t.k}</button>`).join("")} <button class="tmb cancel" data-to="">✕</button></div>`;
+  h+=`<p class="hint-row">${cat.desc}${mine?" · Tocá una selección y elegí su tier.":" · Estás viendo la tier list de "+esc(who?who.name:"")+"."}</p>`;
+  if(mine&&TIER_SEL)h+=`<div class="tmove">Mover <b>${flag(TIER_SEL)} ${TIER_SEL}</b> a: ${TIER_DEFS.map(t=>`<button class="tmb" data-to="${t.k}" style="border-color:${t.c};color:${t.c}">${t.k}</button>`).join("")} <button class="tmb cancel" data-to="">✕</button></div>`;
   h+=`<div class="tier">`;
   TIER_DEFS.forEach(t=>{
     const teams=ALLTEAMS.filter(x=>map[x]===t.k);
     h+=`<div class="trow"><div class="tlab" style="background:${t.c}"><span class="tk">${t.label}</span><span class="tsub">${t.sub}</span></div><div class="tteams">`;
-    h+=teams.length?teams.map(x=>`<button class="tt ${ORG?"ed":""} ${TIER_SEL===x?"sel":""}" data-team="${x}">${flag(x)}<span>${x}</span></button>`).join(""):`<span class="tempty">—</span>`;
+    h+=teams.length?teams.map(x=>`<button class="tt ${mine?"ed":""} ${TIER_SEL===x&&mine?"sel":""}" data-team="${x}">${flag(x)}<span>${x}</span></button>`).join(""):`<span class="tempty">—</span>`;
     h+=`</div></div>`;
   });
   h+=`</div>`;
+  if(mine)h+=`<div class="row" style="margin-top:12px"><button class="btn sm" id="tierReset">Reiniciar a la sugerida</button></div>`;
   v.innerHTML=h;wireTier();
 }
-function wireTier(){
+async function wireTier(){
   const v=document.getElementById("v-tier");
+  v.querySelectorAll("[data-who]").forEach(b=>b.onclick=()=>{TIER_WHO=b.dataset.who;TIER_SEL=null;renderTier();});
   v.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{TIERVIEW=b.dataset.cat;TIER_SEL=null;renderTier();});
-  if(ORG){
+  const who=PLAYERS.find(p=>p.id===TIER_WHO);const mine=who&&who.id===ME;
+  if(mine){
     v.querySelectorAll(".tt").forEach(b=>b.onclick=()=>{TIER_SEL=(TIER_SEL===b.dataset.team)?null:b.dataset.team;renderTier();});
-    v.querySelectorAll("[data-to]").forEach(b=>b.onclick=async()=>{const to=b.dataset.to;if(to&&TIER_SEL){TIERS[TIERVIEW][TIER_SEL]=to;await saveTiers();}TIER_SEL=null;renderTier();});
+    v.querySelectorAll("[data-to]").forEach(b=>b.onclick=async()=>{const to=b.dataset.to;if(to&&TIER_SEL){const p=me();p.tiers=p.tiers||{};p.tiers[TIERVIEW]=p.tiers[TIERVIEW]||{};p.tiers[TIERVIEW][TIER_SEL]=to;await savePlayer(p);}TIER_SEL=null;renderTier();});
+    const rb=document.getElementById("tierReset");if(rb)rb.onclick=async()=>{if(!confirm("¿Reiniciar esta categoría a la tier list sugerida?"))return;const p=me();if(p.tiers)delete p.tiers[TIERVIEW];await savePlayer(p);TIER_SEL=null;renderTier();toast("Reiniciada");};
   }
 }
 
