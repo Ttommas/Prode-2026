@@ -250,6 +250,26 @@ input,select{font-family:var(--body)}
 .gl .flag{width:20px;height:14px}
 .prow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:14px}
 .prow:last-child{border-bottom:0}
+/* tier list */
+.tcats{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px}
+.tcat{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink2);padding:8px 14px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--body)}
+.tcat.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tmove{background:var(--ink);color:#fff;border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tmove b{font-family:var(--disp)}
+.tmb{border:1px solid #fff;background:transparent;color:#fff;width:30px;height:30px;border-radius:8px;font-family:var(--disp);font-weight:800;cursor:pointer;font-size:13px}
+.tmb.cancel{margin-left:auto;border-color:var(--mut2);color:var(--mut2)}
+.tier{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.trow{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+.tlab{flex:0 0 64px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;padding:10px 4px;gap:2px}
+.tlab .tk{font-family:var(--disp);font-weight:800;font-size:22px;line-height:1}
+.tlab .tsub{font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;opacity:.9;text-align:center}
+.tteams{flex:1;display:flex;flex-wrap:wrap;gap:6px;padding:10px;background:var(--surface);align-content:flex-start}
+.tt{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 9px 5px 6px;font-size:12px;font-weight:500;color:var(--ink);cursor:default}
+.tt .flag{width:20px;height:14px}
+.tt.ed{cursor:pointer}
+.tt.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink)}
+.tempty{color:var(--mut2);font-size:13px;padding:4px}
 /* % apuestas en cuadro */
 .brteam{position:relative}
 .brteam .obar{position:absolute;left:0;top:0;bottom:0;background:rgba(30,80,255,.10);z-index:0}
@@ -304,6 +324,7 @@ input,select{font-family:var(--body)}
     <section class="view" id="v-pron"></section>
     <section class="view" id="v-tabla"></section>
     <section class="view" id="v-reglas"></section>
+    <section class="view" id="v-tier"></section>
     <section class="view" id="v-real"></section>
   </div>
 </div>
@@ -387,6 +408,7 @@ const store={
 let CFG={points:{...DEFAULT_POINTS},penalty:60,orgCode:""};
 let ACT={scores:{},rounds:{r16:[],qf:[],sf:[],fin:[]},champ:"",goleador:"",mvp:"",joven:"",bracket:{}};
 let PLAYERS=[],ME=null,ORG=false,VIEW="home",PRON="marc",openDetail=null;
+let TIERVIEW="presente",TIER_SEL=null,TIERS=null,TIERS_JSON="";
 
 function uid(){return Math.random().toString(36).slice(2,9);}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1600);}
@@ -692,6 +714,7 @@ async function loadAll(){
   const a=await store.get("act");if(a){try{ACT=Object.assign(ACT,JSON.parse(a));ACT.rounds=Object.assign({r16:[],qf:[],sf:[],fin:[]},ACT.rounds);ACT.bracket=ACT.bracket||{};}catch(e){}}
   const fx=await store.get("fixmeta");if(fx){try{FIXMETA=JSON.parse(fx)||{};FIXMETA_JSON=fx;}catch(e){FIXMETA={};}}
   const gg=await store.get("goals");if(gg){try{GOALS=JSON.parse(gg)||{};GOALS_JSON=gg;}catch(e){GOALS={};}}
+  try{await ensureTiers();TIERS_JSON=JSON.stringify(TIERS);}catch(e){}
   await loadPlayers();
   const m=await store.getMe();ME=(m&&m.id)?m.id:null;
 }
@@ -809,12 +832,12 @@ async function ensureOrg(fromLogin){
 /* ===================== SHELL ===================== */
 function showApp(){document.getElementById("login").classList.add("hidden");document.getElementById("app").style.display="block";buildNav();updateChip();setView(VIEW);}
 function updateChip(){const p=me();document.getElementById("uname").textContent=p?p.name:"—";document.getElementById("udot").className="dot"+(ORG?" org":"");document.getElementById("orgToggle").textContent=ORG?"⚙ Org ✓":"⚙ Org";}
-const NAVDEF=[{k:"home",c:"blue",n:"00",l:"Inicio"},{k:"pron",c:"orange",n:"01",l:"Mi pronóstico"},{k:"tabla",c:"green",n:"02",l:"Tabla"},{k:"reglas",c:"slate",n:"03",l:"Reglamento"},{k:"real",c:"magenta",n:"04",l:"Resultados",org:true}];
+const NAVDEF=[{k:"home",c:"blue",n:"00",l:"Inicio"},{k:"pron",c:"orange",n:"01",l:"Mi pronóstico"},{k:"tabla",c:"green",n:"02",l:"Tabla"},{k:"tier",c:"magenta",n:"03",l:"Tier list"},{k:"reglas",c:"slate",n:"04",l:"Reglamento"},{k:"real",c:"magenta",n:"05",l:"Resultados",org:true}];
 function buildNav(){const nav=document.getElementById("nav");nav.innerHTML=NAVDEF.filter(t=>!t.org||ORG).map(t=>`<button data-k="${t.k}" data-c="${t.c}" class="${t.k===VIEW?"active":""}"><span class="nn">${t.n}</span><span class="nl">${t.l}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>setView(b.dataset.k));}
 function setView(k){VIEW=k;document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.k===k));document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));document.getElementById("v-"+k).classList.add("active");render();}
 document.getElementById("logoutBtn").onclick=async()=>{ME=null;ORG=false;await store.setMe(null);document.getElementById("app").style.display="none";document.getElementById("login").classList.remove("hidden");await loadPlayers();renderLogin();};
 document.getElementById("orgToggle").onclick=()=>{if(ORG){ORG=false;updateChip();buildNav();if(VIEW==="real")setView("pron");toast("Saliste de organizador");return;}ensureOrg(false);};
-function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
+function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="tier")renderTier();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
 
 /* ===================== INICIO ===================== */
 function dayLabel(){try{const s=new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});return s.charAt(0).toUpperCase()+s.slice(1);}catch(e){return "Hoy";}}
@@ -1088,6 +1111,80 @@ function renderDetail(){
   });
   h+=`<div class="bkr tot"><span>Total</span><span>${total} pts</span></div></div>`;
   d.innerHTML=h;
+}
+
+/* ===================== TIER LIST ===================== */
+const TIER_DEFS=[
+  {k:"S",label:"S",sub:"Élite",c:"#C8841C"},
+  {k:"A",label:"A",sub:"Grande",c:"#1E50FF"},
+  {k:"B",label:"B",sub:"Sólida",c:"#00824C"},
+  {k:"C",label:"C",sub:"Competitiva",c:"#5A5A57"},
+  {k:"D",label:"D",sub:"Aspirante",c:"#9A9A93"}
+];
+const TIER_CATS=[
+  {key:"palmares",name:"Palmarés",desc:"Por Copas del Mundo y finales conseguidas en la historia."},
+  {key:"historia",name:"Tradición",desc:"Peso histórico y jerarquía global más allá de los títulos."},
+  {key:"presente",name:"Presente",desc:"Nivel actual y candidatura al título en 2026 (ranking FIFA, junio)."},
+  {key:"estrellas",name:"Estrellas",desc:"Jerarquía de las figuras del plantel."}
+];
+// listas S/A/B/C por categoría; lo no listado cae a D
+const TIER_SEED={
+  palmares:{
+    S:["Brasil","Alemania","Argentina"],
+    A:["Uruguay","Francia","España","Inglaterra"],
+    B:["Países Bajos","Croacia","Suecia","Marruecos","Portugal","Corea del Sur"],
+    C:["México","Estados Unidos","Bélgica","Paraguay","Chequia","Austria","Suiza","Ghana","Colombia","Japón","Senegal","Costa de Marfil","Ecuador","Túnez","Australia","Escocia","Turquía"]
+  },
+  historia:{
+    S:["Brasil","Argentina","Alemania"],
+    A:["Francia","España","Inglaterra","Países Bajos","Uruguay"],
+    B:["Portugal","Bélgica","Croacia","México","Suecia"],
+    C:["Estados Unidos","Japón","Corea del Sur","Marruecos","Senegal","Colombia","Suiza","Ghana","Costa de Marfil","Egipto","Irán","Australia","Paraguay","Ecuador","Túnez","Escocia","Austria","Chequia","Turquía"]
+  },
+  presente:{
+    S:["Argentina","España","Francia"],
+    A:["Inglaterra","Brasil","Portugal","Países Bajos","Alemania","Bélgica"],
+    B:["Croacia","Colombia","Uruguay","Marruecos","Suiza","México","Senegal","Japón","Estados Unidos","Ecuador","Noruega"],
+    C:["Austria","Australia","Corea del Sur","Egipto","Costa de Marfil","Irán","Paraguay","Suecia","Argelia","Túnez","Escocia","Qatar","Canadá","Turquía"]
+  },
+  estrellas:{
+    S:["Argentina","Francia","Portugal","Noruega"],
+    A:["Inglaterra","España","Brasil","Bélgica","Egipto"],
+    B:["Países Bajos","Alemania","Croacia","Uruguay","Suecia","Colombia"],
+    C:["Marruecos","Senegal","Japón","Estados Unidos","Suiza","México","Costa de Marfil","Austria","Corea del Sur","Ecuador","Australia"]
+  }
+};
+function buildTiers(){const out={};TIER_CATS.forEach(cat=>{const map={};const seed=TIER_SEED[cat.key]||{};ALLTEAMS.forEach(t=>{map[t]="D";});["S","A","B","C"].forEach(tk=>(seed[tk]||[]).forEach(t=>{if(map[t]!=null)map[t]=tk;}));out[cat.key]=map;});return out;}
+async function ensureTiers(){if(TIERS)return;const raw=await store.get("tiers");if(raw){try{TIERS=JSON.parse(raw);}catch(e){}}if(!TIERS)TIERS=buildTiers();
+  // completar categorías o equipos faltantes con el seed
+  const base=buildTiers();TIER_CATS.forEach(c=>{TIERS[c.key]=Object.assign({},base[c.key],TIERS[c.key]||{});});}
+async function saveTiers(){const j=JSON.stringify(TIERS);if(j!==TIERS_JSON){TIERS_JSON=j;await store.set("tiers",j);}}
+function renderTier(){
+  const v=document.getElementById("v-tier");
+  if(!TIERS){ensureTiers().then(render);v.innerHTML='<div class="band" data-c="magenta"><div class="be">04 · Grandeza</div><h2>Tier list mundialista</h2></div><p class="sub" style="padding:14px">Cargando…</p>';return;}
+  const cat=TIER_CATS.find(c=>c.key===TIERVIEW)||TIER_CATS[0];
+  const map=TIERS[cat.key]||{};
+  let h=`<div class="band" data-c="magenta"><div class="be">04 · Grandeza</div><h2>Tier list mundialista</h2><p>Las 48 selecciones ordenadas por grandeza deportiva. ${ORG?"Como organizador podés reacomodarlas.":"La define el organizador del grupo."}</p><div class="bignum">48</div></div>`;
+  h+=`<div class="tcats">`+TIER_CATS.map(c=>`<button class="tcat ${c.key===TIERVIEW?"on":""}" data-cat="${c.key}">${c.name}</button>`).join("")+`</div>`;
+  h+=`<p class="hint-row">${cat.desc}</p>`;
+  if(ORG&&TIER_SEL)h+=`<div class="tmove">Mover <b>${flag(TIER_SEL)} ${TIER_SEL}</b> a: ${TIER_DEFS.map(t=>`<button class="tmb" data-to="${t.k}" style="border-color:${t.c};color:${t.c}">${t.k}</button>`).join("")} <button class="tmb cancel" data-to="">✕</button></div>`;
+  h+=`<div class="tier">`;
+  TIER_DEFS.forEach(t=>{
+    const teams=ALLTEAMS.filter(x=>map[x]===t.k);
+    h+=`<div class="trow"><div class="tlab" style="background:${t.c}"><span class="tk">${t.label}</span><span class="tsub">${t.sub}</span></div><div class="tteams">`;
+    h+=teams.length?teams.map(x=>`<button class="tt ${ORG?"ed":""} ${TIER_SEL===x?"sel":""}" data-team="${x}">${flag(x)}<span>${x}</span></button>`).join(""):`<span class="tempty">—</span>`;
+    h+=`</div></div>`;
+  });
+  h+=`</div>`;
+  v.innerHTML=h;wireTier();
+}
+function wireTier(){
+  const v=document.getElementById("v-tier");
+  v.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{TIERVIEW=b.dataset.cat;TIER_SEL=null;renderTier();});
+  if(ORG){
+    v.querySelectorAll(".tt").forEach(b=>b.onclick=()=>{TIER_SEL=(TIER_SEL===b.dataset.team)?null:b.dataset.team;renderTier();});
+    v.querySelectorAll("[data-to]").forEach(b=>b.onclick=async()=>{const to=b.dataset.to;if(to&&TIER_SEL){TIERS[TIERVIEW][TIER_SEL]=to;await saveTiers();}TIER_SEL=null;renderTier();});
+  }
 }
 
 /* ===================== REGLAMENTO ===================== */
