@@ -970,8 +970,15 @@ function renderReal(){
     <datalist id="dlMvp">${MVPS.map(n=>`<option value="${n}">`).join("")}</datalist>
     <datalist id="dlJov">${JOVENES.map(n=>`<option value="${n}">`).join("")}</datalist>
     <p class="small" style="margin-top:10px">Elegí de la lista para que coincida con lo que cargaron los jugadores (no distingue mayúsculas ni acentos).</p></div>`;
+  h+=participantsBlock();
   v.innerHTML=h;wireReal();
 }
+function participantsBlock(){
+  let h=`<div class="block"><h3>Participantes (${PLAYERS.length})</h3><p class="sub">Eliminá un jugador y su pronóstico. No se puede deshacer.</p>`;
+  h+=PLAYERS.length?PLAYERS.map(p=>`<div class="prow"><span>${esc(p.name)}${p.id===ME?' <span class="badge">vos</span>':""}</span>${p.id===ME?'<span class="small">jugador activo</span>':`<button class="btn sm" data-del="${p.id}" data-name="${esc(p.name)}" style="border-color:var(--red);color:var(--red)">Eliminar</button>`}</div>`).join(""):`<p class="small">Todavía no hay participantes.</p>`;
+  return h+`</div>`;
+}
+function wireParticipants(v){v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm(`¿Eliminar a ${b.dataset.name}? Se borra su pronóstico y no se puede deshacer.`))return;await deletePlayer(b.dataset.del);if(VIEW==="real")renderReal();else renderReglas();toast("Jugador eliminado");});}
 function aChips(arr,key){return ALLTEAMS.map(t=>`<span class="chip ${arr.includes(t)?"on":""}" data-around="${key}" data-team="${t}">${flag(t)}${t}</span>`).join("");}
 function manualRoundsBlock(){
   let h="";
@@ -1016,6 +1023,7 @@ function wireReal(){
     box.querySelectorAll(".chip").forEach(ch=>ch.onclick=async()=>{const t=ch.dataset.team;ACT.rounds[key]=ACT.rounds[key]||[];const i=ACT.rounds[key].indexOf(t);if(i>=0)ACT.rounds[key].splice(i,1);else{if(ACT.rounds[key].length>=max){toast("Máximo "+max);return;}ACT.rounds[key].push(t);}await saveAct();box.innerHTML=aChips(ACT.rounds[key],key);document.getElementById("acnt-"+key).innerHTML=`<b>${ACT.rounds[key].length}</b>/${max}`;wireReal();});});
   const ac=document.getElementById("aChamp");if(ac)ac.onchange=async()=>{ACT.champ=ac.value;await saveAct();};
   [["aGol","goleador"],["aMvp","mvp"],["aJov","joven"]].forEach(([id,k])=>{const el=document.getElementById(id);if(el)el.addEventListener("change",async()=>{ACT[k]=el.value.trim();await saveAct();});});
+  wireParticipants(document.getElementById("v-real"));
 }
 
 /* ===================== SCORING ===================== */
@@ -1090,13 +1098,11 @@ function renderReglas(){
   h+=`<div class="rules">${RULE_DEFS.map(([k,l])=>`<div class="rule"><div class="rl">${l}</div><div class="ri">${ed?`<input type="number" data-pk="${k}" value="${CFG.points[k]}" min="0">`:`<span class="v">${CFG.points[k]}</span>`}<span class="u">pts</span></div></div>`).join("")}</div>`;
   h+=`<div class="block" style="margin-top:16px;border-color:var(--amber)"><h3 style="color:var(--amber)">Penalización por modificar</h3><p class="sub">Tras cerrar, podés rehacer el cuadro y los especiales viendo la fase de grupos, pero cada equipo que cambiaste y acertás suma solo este porcentaje. El que no toca nada cobra 100%.</p><div class="ri" style="display:flex;align-items:baseline;gap:8px">${ed?`<input type="number" id="penInput" min="0" max="100" step="5" value="${CFG.penalty}" style="width:80px;font-family:var(--disp);font-size:26px;text-align:center;border:1px solid var(--amber);background:var(--bg);padding:2px 0">`:`<span class="v" style="color:var(--amber)">${CFG.penalty}</span>`}<span class="u">% de los puntos</span></div></div>`;
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
-  if(ed){h+=`<div class="block"><h3>Participantes (${PLAYERS.length})</h3><p class="sub">Eliminá un jugador y su pronóstico. No se puede deshacer.</p>`;
-    h+=PLAYERS.length?PLAYERS.map(p=>`<div class="prow"><span>${esc(p.name)}${p.id===ME?' <span class="badge">vos</span>':""}</span>${p.id===ME?'<span class="small">jugador activo</span>':`<button class="btn sm" data-del="${p.id}" data-name="${esc(p.name)}" style="border-color:var(--red);color:var(--red)">Eliminar</button>`}</div>`).join(""):`<p class="small">Todavía no hay participantes.</p>`;
-    h+=`</div>`;}
+  if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
   v.innerHTML=h;
   if(ed){
-    v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm(`¿Eliminar a ${b.dataset.name}? Se borra su pronóstico y no se puede deshacer.`))return;await deletePlayer(b.dataset.del);renderReglas();toast("Jugador eliminado");});
+    wireParticipants(v);
     v.querySelectorAll("input[data-pk]").forEach(inp=>inp.addEventListener("change",async()=>{CFG.points[inp.dataset.pk]=parseInt(inp.value)||0;await saveCfg();toast("Reglamento guardado");}));
     const pen=document.getElementById("penInput");if(pen)pen.onchange=async()=>{CFG.penalty=Math.max(0,Math.min(100,parseInt(pen.value)||0));pen.value=CFG.penalty;await saveCfg();toast("Guardado");};
     const rb=document.getElementById("resetAll");if(rb)rb.onclick=async()=>{if(!confirm("¿Borrar TODOS los jugadores, pronósticos y resultados?"))return;const keys=await store.list("p:");for(const k of keys)await store.del(k);await store.del("act");await store.setMe(null);CFG.points={...DEFAULT_POINTS};CFG.penalty=60;await saveCfg();ACT={scores:{},rounds:{r16:[],qf:[],sf:[],fin:[]},champ:"",goleador:"",mvp:"",joven:"",bracket:{}};PLAYERS=[];ME=null;ORG=false;document.getElementById("app").style.display="none";document.getElementById("login").classList.remove("hidden");renderLogin();toast("Todo borrado");};
