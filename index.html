@@ -214,7 +214,11 @@ input,select{font-family:var(--body)}
 .pop .psong{font-family:var(--disp);font-weight:800;font-size:27px;line-height:1.07;letter-spacing:-.015em;color:var(--ink)}
 .pop .pmsg{font-size:14.5px;color:var(--ink2);margin-top:10px;line-height:1.5}
 .pop .pmeta{margin-top:16px;padding-top:13px;border-top:1px solid var(--line2);font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;align-items:center;gap:10px}
-.pop .pcta{margin-top:18px;width:100%;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:var(--disp);font-weight:700;font-size:14px;padding:11px;border-radius:var(--r2)}
+.pop .prow{display:flex;gap:8px;margin-top:18px}
+.pop .pshare{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:var(--disp);font-weight:700;font-size:14px;padding:11px;border-radius:var(--r2)}
+.pop .pshare:hover{background:var(--bg);border-color:var(--ink)}
+.pop .pshare:disabled{opacity:.6}
+.pop .pcta{flex:1;border:1px solid var(--ink);background:var(--ink);color:#fff;font-family:var(--disp);font-weight:700;font-size:14px;padding:11px;border-radius:var(--r2)}
 .pop .pcta:hover{background:var(--blue);border-color:var(--blue)}
 .pop .pfoot{text-align:center;font-size:10px;color:var(--mut2);margin-top:12px;letter-spacing:.03em}
 </style>
@@ -479,7 +483,8 @@ const SONGS={
  ]
 };
 function pickSong(a){return a[Math.floor(Math.random()*a.length)];}
-let popupQueue=[], popupOpen=false, wasLeader=false;
+let popupQueue=[], popupOpen=false, wasLeader=false, currentPopup=null;
+const POP_ACCENT={exact:"#00824C",win:"#00824C",miss:"#E4002B",thrash:"#E4002B",live:"#1E50FF",arg:"#1E50FF",lead:"#C8841C",save:"#1E50FF"};
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function popKey(id){return "prode_seen_"+(ME||"x")+"_"+id;}
@@ -492,27 +497,84 @@ function classifyResult(ps,as){
 function ensureOverlay(){
   let o=document.getElementById("songOvl");
   if(!o){o=document.createElement("div");o.id="songOvl";o.className="ovl";
-    o.innerHTML='<div class="pop"><div class="pbar"></div><div class="pbd"><div class="ph"><span class="pband"></span><button class="px" aria-label="Cerrar">\u2715</button></div><div class="psong"></div><div class="pmsg"></div><div class="pmeta"></div><button class="pcta">Dale</button><div class="pfoot">En memoria del Indio \u00b7 1949\u20132026</div></div></div>';
+    o.innerHTML='<div class="pop"><div class="pbar"></div><div class="pbd"><div class="ph"><span class="pband"></span><button class="px" aria-label="Cerrar">\u2715</button></div><div class="psong"></div><div class="pmsg"></div><div class="pmeta"></div><div class="prow"><button class="pshare">Compartir en historia</button><button class="pcta">Dale</button></div><div class="pfoot">En memoria del Indio \u00b7 1949\u20132026</div></div></div>';
     document.body.appendChild(o);
     o.querySelector(".px").onclick=closePopup;
     o.querySelector(".pcta").onclick=closePopup;
+    o.querySelector(".pshare").onclick=sharePopup;
     o.addEventListener("click",function(e){if(e.target===o)closePopup();});
   }
   return o;
 }
-function closePopup(){const o=document.getElementById("songOvl");if(o)o.classList.remove("show");popupOpen=false;setTimeout(showNextPopup,260);}
+function closePopup(){const o=document.getElementById("songOvl");if(o)o.classList.remove("show");popupOpen=false;currentPopup=null;setTimeout(showNextPopup,260);}
 function showNextPopup(){
   if(popupOpen||!popupQueue.length||document.hidden)return;
   const app=document.getElementById("app");if(!app||app.style.display!=="block")return;
-  const it=popupQueue.shift();const o=ensureOverlay();const pop=o.querySelector(".pop");
+  const it=popupQueue.shift();currentPopup=it;const o=ensureOverlay();const pop=o.querySelector(".pop");
   pop.className="pop "+it.cat;
   o.querySelector(".pband").textContent="\u266a "+it.song[1];
   o.querySelector(".psong").textContent=it.song[0];
   o.querySelector(".pmsg").textContent=it.song[2];
-  o.querySelector(".pmeta").innerHTML=it.meta||"";
+  const mt=o.querySelector(".pmeta");if(it.meta){mt.innerHTML=it.meta;mt.style.display="";}else{mt.style.display="none";}
   popupOpen=true;o.classList.add("show");
 }
-function enqueuePopup(cat,meta){if(SONGS[cat])popupQueue.push({cat:cat,song:pickSong(SONGS[cat]),meta:meta});}
+function enqueuePopup(cat,meta,share){if(SONGS[cat])popupQueue.push({cat:cat,song:pickSong(SONGS[cat]),meta:meta,share:share||{}});}
+
+function wrapLines(x,text,maxW){const w=(text||"").split(" ");const out=[];let cur="";w.forEach(function(word){const t=cur?cur+" "+word:word;if(x.measureText(t).width>maxW&&cur){out.push(cur);cur=word;}else cur=t;});if(cur)out.push(cur);return out;}
+async function makeStoryBlob(it){
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+  const W=1080,H=1920,P=96,maxW=W-P*2;
+  const c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d");
+  const accent=POP_ACCENT[it.cat]||"#FFFFFF";
+  x.fillStyle="#141414";x.fillRect(0,0,W,H);
+  x.textBaseline="alphabetic";
+  // branding
+  x.fillStyle=accent;x.beginPath();x.arc(P+9,150,9,0,7);x.fill();
+  x.fillStyle="rgba(255,255,255,.62)";x.font="600 30px Manrope, sans-serif";
+  x.save();x.translate(P+30,160);if(x.letterSpacing!==undefined)x.letterSpacing="6px";x.fillText("PRODE MUNDIAL \u00b7 26",0,0);x.restore();
+  x.fillStyle=accent;x.fillRect(P,196,130,10);
+  // central block (band + title + msg)
+  x.font="34px Manrope, sans-serif";const band="\u266a "+it.song[1];
+  let fs=104;x.font="800 "+fs+"px Manrope, sans-serif";let tl=wrapLines(x,it.song[0],maxW);
+  while(tl.length>3&&fs>60){fs-=8;x.font="800 "+fs+"px Manrope, sans-serif";tl=wrapLines(x,it.song[0],maxW);}
+  const tLH=Math.round(fs*1.04);
+  x.font="42px Manrope, sans-serif";const ml=wrapLines(x,it.song[2],maxW);const mLH=58;
+  const blockH=46+26+tl.length*tLH+30+ml.length*mLH;
+  let y=Math.max(720,Math.round(1040-blockH/2));
+  x.fillStyle="rgba(255,255,255,.55)";x.font="34px Manrope, sans-serif";x.fillText(band,P,y);y+=26;
+  x.fillStyle="#FFFFFF";x.font="800 "+fs+"px Manrope, sans-serif";y+=tLH-Math.round(fs*0.12);
+  tl.forEach(function(ln,i){x.fillText(ln,P,y+i*tLH);});y+=(tl.length-1)*tLH+30;
+  x.fillStyle="rgba(255,255,255,.72)";x.font="42px Manrope, sans-serif";y+=mLH-14;
+  ml.forEach(function(ln,i){x.fillText(ln,P,y+i*mLH);});
+  // ticket
+  const tkY=1452,tkH=196;
+  x.fillStyle="#F1E6CC";if(x.roundRect){x.beginPath();x.roundRect(P,tkY,maxW,tkH,18);x.fill();}else{x.fillRect(P,tkY,maxW,tkH);}
+  const l1=it.share&&it.share.l1?it.share.l1:it.song[0];
+  const l2=it.share&&it.share.l2?it.share.l2:"";
+  x.fillStyle="#141414";x.font="700 46px Manrope, sans-serif";x.fillText(l1,P+34,tkY+90,maxW-68);
+  if(l2){x.fillStyle="#8A8478";x.font="600 30px Manrope, sans-serif";x.save();x.translate(P+34,tkY+146);if(x.letterSpacing!==undefined)x.letterSpacing="2px";x.fillText(l2.toUpperCase(),0,0,maxW-68);x.restore();}
+  // foot
+  x.fillStyle="rgba(255,255,255,.5)";x.font="32px Manrope, sans-serif";x.fillText("Arm\u00e1 tu cuadro y jug\u00e1 el prode",P,1764);
+  x.fillStyle="rgba(255,255,255,.32)";x.font="28px Manrope, sans-serif";x.fillText("En memoria del Indio \u00b7 1949\u20132026",P,1808);
+  return await new Promise(function(res){c.toBlob(res,"image/png",0.92);});
+}
+async function sharePopup(){
+  if(!currentPopup)return;
+  const btn=document.querySelector("#songOvl .pshare");if(!btn)return;
+  const label=btn.textContent;btn.disabled=true;btn.textContent="Generando\u2026";
+  try{
+    const blob=await makeStoryBlob(currentPopup);
+    if(!blob)throw new Error("noblob");
+    const file=new File([blob],"prode-historia.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:"Prode Mundial 26"});
+    }else{
+      const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="prode-historia.png";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},5000);
+      toast("Imagen descargada \u00b7 subila a tu historia");
+    }
+  }catch(e){if(!e||e.name!=="AbortError")toast("No se pudo compartir");}
+  btn.disabled=false;btn.textContent=label;
+}
 function queueResultPopups(){
   if(!ME||!me())return;
   const my=(me().scores)||{};
@@ -521,14 +583,15 @@ function queueResultPopups(){
     const f=FIXMETA[m.id];if(!f)return;
     const as=ACT.scores[m.id];
     const argIn=(m.a===ARG_TEAM||m.b===ARG_TEAM);
-    if(isLiveSt(f.status)&&argIn){const lk="prode_live_"+ME+"_"+m.id;if(!lsGet(lk)){lsSet(lk,"1");if(!first)enqueuePopup("live",`<span>${m.a} vs ${m.b} \u00b7 en vivo</span>`);}}
+    if(isLiveSt(f.status)&&argIn){const lk="prode_live_"+ME+"_"+m.id;if(!lsGet(lk)){lsSet(lk,"1");if(!first)enqueuePopup("live",`<span>${m.a} vs ${m.b} \u00b7 en vivo</span>`,{l1:`${m.a} vs ${m.b}`,l2:"En vivo"});}}
     if(isFinal(f.status)&&as&&as.a!=null&&as.b!=null){
       const k=popKey(m.id);if(lsGet(k))return;lsSet(k,"1");if(first)return;
       const ps=my[m.id];
       const argWon=argIn&&((m.a===ARG_TEAM&&as.a>as.b)||(m.b===ARG_TEAM&&as.b>as.a));
       const meta=`<span>${m.a} <b>${as.a}\u2013${as.b}</b> ${m.b}</span>`+((ps&&ps.a!=null)?`<span style="color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-size:11px">vos: ${ps.a}\u2013${ps.b}</span>`:"");
-      if(argWon){enqueuePopup("arg",`<span>${m.a} <b>${as.a}\u2013${as.b}</b> ${m.b}</span>`);return;}
-      if(ps&&ps.a!=null&&ps.b!=null)enqueuePopup(classifyResult(ps,as),meta);
+      const sh={l1:`${m.a} ${as.a}\u2013${as.b} ${m.b}`,l2:(ps&&ps.a!=null)?`Tu pron\u00f3stico \u00b7 ${ps.a}\u2013${ps.b}`:""};
+      if(argWon){enqueuePopup("arg",`<span>${m.a} <b>${as.a}\u2013${as.b}</b> ${m.b}</span>`,{l1:`${m.a} ${as.a}\u2013${as.b} ${m.b}`,l2:"\u00a1Gan\u00f3 Argentina!"});return;}
+      if(ps&&ps.a!=null&&ps.b!=null)enqueuePopup(classifyResult(ps,as),meta,sh);
     }
   });
   if(first)lsSet("prode_init_"+ME,"1");
@@ -536,7 +599,7 @@ function queueResultPopups(){
 function checkLeader(rows){
   if(!ME||!rows||!rows.length)return;
   const top=rows[0];const iAmTop=(top.p.id===ME&&top.sc.total>0);
-  if(iAmTop&&!wasLeader){wasLeader=true;if(lsGet("prode_init_"+ME)){enqueuePopup("lead",`<span>1\u00b0 \u00b7 <b>${top.sc.total} pts</b></span>`);showNextPopup();}}
+  if(iAmTop&&!wasLeader){wasLeader=true;if(lsGet("prode_init_"+ME)){enqueuePopup("lead",`<span>1\u00b0 \u00b7 <b>${top.sc.total} pts</b></span>`,{l1:"1\u00b0 en la tabla",l2:`${top.sc.total} puntos`});showNextPopup();}}
   else if(!iAmTop){wasLeader=false;}
 }
 
@@ -552,7 +615,7 @@ async function loadPlayers(){
   for(const k of keys){const v=await store.get(k);if(v){try{arr.push(normPlayer(JSON.parse(v)));}catch(e){}}}
   arr.sort((x,y)=>x.name.localeCompare(y.name));PLAYERS=arr;
 }
-async function savePlayer(p){await store.set("p:"+p.id,JSON.stringify(p));if(p.id===ME&&!lsGet("prode_saved_"+ME)){lsSet("prode_saved_"+ME,"1");enqueuePopup("save","");showNextPopup();}}
+async function savePlayer(p){await store.set("p:"+p.id,JSON.stringify(p));if(p.id===ME&&!lsGet("prode_saved_"+ME)){lsSet("prode_saved_"+ME,"1");enqueuePopup("save","<span>Listo, ya qued\u00f3 cargado</span>",{l1:"Pron\u00f3stico guardado",l2:""});showNextPopup();}}
 async function saveCfg(){await store.set("cfg",JSON.stringify(CFG));}
 async function saveAct(){await store.set("act",JSON.stringify(ACT));}
 function me(){return PLAYERS.find(p=>p.id===ME)||null;}
