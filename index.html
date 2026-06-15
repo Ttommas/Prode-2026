@@ -421,14 +421,32 @@ const KO_WIN=[{key:"r16",from:"2026-06-28",to:"2026-07-03"},{key:"qf",from:"2026
  {key:"sf",from:"2026-07-09",to:"2026-07-11"},{key:"fin",from:"2026-07-14",to:"2026-07-15"}];
 const FINAL_DATE="2026-07-19";
 async function fetchDay(d){try{const r=await fetch(LIVE_BASE+"/eventsday.php?d="+d+"&l="+LIVE_LEAGUE);if(!r.ok)return [];return (await r.json()).events||[];}catch(e){return [];}}
-function tourDates(){const out=[],d=new Date("2026-06-11T00:00:00Z"),end=new Date("2026-07-19T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
+const TOUR_START="2026-06-11",TOUR_END="2026-07-19";
+function clampDate(s){return s<TOUR_START?TOUR_START:(s>TOUR_END?TOUR_END:s);}
+function dateRange(a,b){const out=[],d=new Date(a+"T00:00:00Z"),end=new Date(b+"T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
+function offsetDay(today,n){const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+let TODAY="",TODAYGAMES=[];
+function artParts(iso){
+  if(!iso)return {d:"",t:""};
+  let s=(""+iso).trim();if(s.length===10)s+="T00:00:00";
+  const dd=new Date(/[Z+]/.test(s)?s:s+"Z");
+  if(isNaN(dd))return {d:(""+iso).slice(0,10),t:(""+iso).slice(11,16)};
+  try{const f=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Argentina/Buenos_Aires",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+    const p={};f.formatToParts(dd).forEach(x=>p[x.type]=x.value);let hh=p.hour==="24"?"00":p.hour;
+    return {d:`${p.year}-${p.month}-${p.day}`,t:`${hh}:${p.minute}`};
+  }catch(e){const m=new Date(dd.getTime()-3*3600000);return {d:m.toISOString().slice(0,10),t:m.toISOString().slice(11,16)};}
+}
 function ingestEvents(evs){evs.forEach(e=>{
-  const H=apiTeam(e.strHomeTeam),A=apiTeam(e.strAwayTeam);if(!H||!A)return;
-  const date=e.dateEvent||"",ts=e.strTimestamp||date,st=e.strStatus||"",sh=e.intHomeScore,sa=e.intAwayScore;
-  const round=(e.intRound!=null?(""+e.intRound):""),time=(e.strTime||"").slice(0,5);
+  const H=apiTeam(e.strHomeTeam),A=apiTeam(e.strAwayTeam);
+  const date=e.dateEvent||"",st=e.strStatus||"",sh=e.intHomeScore,sa=e.intAwayScore;
+  const round=(e.intRound!=null?(""+e.intRound):"");
+  const ap=artParts(e.strTimestamp||(date+"T"+(e.strTime||"00:00:00")));
+  const time=ap.t||((e.strTime||"").slice(0,5)),artDate=ap.d||date,ts=e.strTimestamp||date;
+  if(artDate&&artDate===TODAY)TODAYGAMES.push({home:H||e.strHomeTeam||"?",away:A||e.strAwayTeam||"?",time,status:st,sh,sa,group:e.strGroup||""});
+  if(!H||!A)return;
   const m=slotForPair(H,A);
   if(m){const ls=(sh!=null&&sa!=null)?{a:(H===m.a)?+sh:+sa,b:(H===m.a)?+sa:+sh}:null;
-    FIXMETA[m.id]=Object.assign(FIXMETA[m.id]||{},{date,ts,home:H,away:A,status:st,ls,round,time});
+    FIXMETA[m.id]=Object.assign(FIXMETA[m.id]||{},{date,artDate,ts,home:H,away:A,status:st,ls,round,time});
     if(isFinal(st)&&ls){LIVE.scores[m.id]={a:ls.a,b:ls.b};}}
   else if(isFinal(st)&&sh!=null&&sa!=null&&date>="2026-06-28"){let w=null;if(+sh>+sa)w=H;else if(+sa>+sh)w=A;if(w)LIVE.ko.push({date,win:w});}
 });}
@@ -442,21 +460,19 @@ function applyLiveToAct(){let changed=false;
     ["r16","qf","sf","fin"].forEach(key=>{if(reached[key].size){const arr=[...reached[key]];if(JSON.stringify((ACT.rounds[key]||[]).slice().sort())!==JSON.stringify(arr.slice().sort())){ACT.rounds[key]=arr;changed=true;}}});
     if(champ&&ACT.champ!==champ){ACT.champ=champ;changed=true;}}
   return changed;}
-let TODAYGAMES=[];
-async function fetchTodayGames(today){const evs=await fetchDay(today);TODAYGAMES=evs.map(e=>{
-  const H=apiTeam(e.strHomeTeam)||e.strHomeTeam,A=apiTeam(e.strAwayTeam)||e.strAwayTeam;
-  return {home:H,away:A,time:(e.strTime||"").slice(0,5),status:e.strStatus||"",sh:e.intHomeScore,sa:e.intAwayScore,group:e.strGroup||""};
-}).sort((x,y)=>(x.time||"99").localeCompare(y.time||"99"));}
 async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSyncing=true;
   try{LIVE={scores:{},ko:[]};
-    const today=new Date().toISOString().slice(0,10);
-    const needFull=opts.full||lsGet("prode_fullscan")!==today||Object.keys(FIXMETA).length<40;
+    const now=new Date();const today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    TODAY=today;TODAYGAMES=[];
+    const cached=Object.keys(FIXMETA).length;
+    const needFull=opts.full||lsGet("prode_fullscan")!==today||cached<20;
     let dates;
-    if(needFull)dates=tourDates();
-    else{dates=[];const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()-1);for(let i=0;i<4;i++){dates.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}}
-    for(const d of dates){ingestEvents(await fetchDay(d));if(needFull)await new Promise(r=>setTimeout(r,110));}
+    if(needFull&&cached<20)dates=dateRange(TOUR_START,clampDate(offsetDay(today,4)));      // primera vez: desde el inicio hasta hoy+4
+    else if(needFull)dates=dateRange(clampDate(offsetDay(today,-4)),clampDate(offsetDay(today,4))); // refresco diario: ventana de 9 días
+    else dates=dateRange(clampDate(offsetDay(today,-1)),clampDate(offsetDay(today,2)));    // polling: ayer..+2
+    for(const d of dates){ingestEvents(await fetchDay(d));if(needFull)await new Promise(r=>setTimeout(r,140));}
+    TODAYGAMES.sort((x,y)=>(x.time||"99").localeCompare(y.time||"99"));
     if(needFull)lsSet("prode_fullscan",today);
-    try{await fetchTodayGames(today);}catch(e){}
     recomputeMatchdays();
     const changed=applyLiveToAct();if(changed)await saveAct();
     try{queueResultPopups();}catch(e){}
@@ -806,10 +822,10 @@ function renderHome(){
 function teamSpan(t){return `${flag(t)}<span class="nm">${t}</span>`;}
 function fmtD(d){if(!d||d.length<10)return "";const[y,mo,da]=d.split("-");return da+"/"+mo;}
 function realBadge(m){const f=FIXMETA[m.id];if(!f)return "";
-  const dt=fmtD(f.date),hr=f.time?(" "+f.time):"";
+  const dt=fmtD(f.artDate||f.date),hr=f.time?(" "+f.time):"";
   if(isFinal(f.status)&&f.ls)return `<div class="rb fin">${dt?dt+" · ":""}Final <b>${f.ls.a}-${f.ls.b}</b></div>`;
   if(isLiveSt(f.status))return `<div class="rb live">● EN VIVO${f.ls?` <b>${f.ls.a}-${f.ls.b}</b>`:""}</div>`;
-  if(dt)return `<div class="rb">${dt}${hr}</div>`;
+  if(dt)return `<div class="rb">${dt}${hr} hs</div>`;
   return "";}
 function teamOptions(sel){let o=`<option value="">—</option>`;ALLTEAMS.forEach(t=>o+=`<option value="${t}" ${t===sel?"selected":""}>${t}</option>`);return o;}
 
