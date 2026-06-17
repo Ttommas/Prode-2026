@@ -250,6 +250,8 @@ input,select{font-family:var(--body)}
 .gl .flag{width:20px;height:14px}
 .prow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:14px}
 .prow:last-child{border-bottom:0}
+.padj{display:inline-flex;align-items:center;gap:6px}
+.padj label{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 /* % apuestas en cuadro */
 .brteam{position:relative}
 .brteam .obar{position:absolute;left:0;top:0;bottom:0;background:rgba(30,80,255,.10);z-index:0}
@@ -392,7 +394,7 @@ function uid(){return Math.random().toString(36).slice(2,9);}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1600);}
 function esc(s){return (s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
 function flag(t){const c=CODE[t];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="" loading="lazy">`:`<span class="flag noflag"></span>`;}
-function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",original:p.original||null};}
+function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",adj:Number(p.adj)||0,original:p.original||null};}
 
 /* ===================== RESULTADOS EN VIVO (auto · fuente: ESPN) ===================== */
 const LIVE_BASE="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
@@ -974,11 +976,14 @@ function renderReal(){
   v.innerHTML=h;wireReal();
 }
 function participantsBlock(){
-  let h=`<div class="block"><h3>Participantes (${PLAYERS.length})</h3><p class="sub">Eliminá un jugador y su pronóstico. No se puede deshacer.</p>`;
-  h+=PLAYERS.length?PLAYERS.map(p=>`<div class="prow"><span>${esc(p.name)}${p.id===ME?' <span class="badge">vos</span>':""}</span>${p.id===ME?'<span class="small">jugador activo</span>':`<button class="btn sm" data-del="${p.id}" data-name="${esc(p.name)}" style="border-color:var(--red);color:var(--red)">Eliminar</button>`}</div>`).join(""):`<p class="small">Todavía no hay participantes.</p>`;
+  let h=`<div class="block"><h3>Participantes (${PLAYERS.length})</h3><p class="sub">Ajuste = puntos sumados o restados a mano (bonus/corrección). Eliminar borra al jugador y su pronóstico; no se puede deshacer.</p>`;
+  h+=PLAYERS.length?PLAYERS.map(p=>`<div class="prow"><span>${esc(p.name)}${p.id===ME?' <span class="badge">vos</span>':""}</span><span class="padj"><label>Ajuste</label><input type="number" step="1" value="${Number(p.adj)||0}" data-adj="${p.id}" style="width:64px;font-family:var(--disp);text-align:center;border:1px solid var(--line);background:var(--bg);padding:3px 0"></span>${p.id===ME?'<span class="small">jugador activo</span>':`<button class="btn sm" data-del="${p.id}" data-name="${esc(p.name)}" style="border-color:var(--red);color:var(--red)">Eliminar</button>`}</div>`).join(""):`<p class="small">Todavía no hay participantes.</p>`;
   return h+`</div>`;
 }
-function wireParticipants(v){v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm(`¿Eliminar a ${b.dataset.name}? Se borra su pronóstico y no se puede deshacer.`))return;await deletePlayer(b.dataset.del);if(VIEW==="real")renderReal();else renderReglas();toast("Jugador eliminado");});}
+function wireParticipants(v){
+  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm(`¿Eliminar a ${b.dataset.name}? Se borra su pronóstico y no se puede deshacer.`))return;await deletePlayer(b.dataset.del);if(VIEW==="real")renderReal();else renderReglas();toast("Jugador eliminado");});
+  v.querySelectorAll("[data-adj]").forEach(inp=>inp.onchange=async()=>{const p=PLAYERS.find(x=>x.id===inp.dataset.adj);if(!p)return;p.adj=parseInt(inp.value)||0;await savePlayer(p);toast("Ajuste guardado");});
+}
 function aChips(arr,key){return ALLTEAMS.map(t=>`<span class="chip ${arr.includes(t)?"on":""}" data-around="${key}" data-team="${t}">${flag(t)}${t}</span>`).join("");}
 function manualRoundsBlock(){
   let h="";
@@ -1031,7 +1036,7 @@ function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-
 function sign(a,b){return a>b?1:a<b?-1:0;}
 function computePoints(p){
   const P=CFG.points,fac=CFG.penalty/100;
-  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0};
+  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,Ajuste:0};
   MATCHES.forEach(m=>{const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;
     const k="J"+m.md;if(ps.a===as.a&&ps.b===as.b)bd[k]+=P.exact;else if(sign(ps.a,ps.b)===sign(as.a,as.b))bd[k]+=P.outcome;});
   const pq=qualifiers(p.scores),aq=qualifiers(ACT.scores);
@@ -1049,6 +1054,7 @@ function computePoints(p){
   if(p.goleador&&ACT.goleador&&norm(p.goleador)===norm(ACT.goleador))bd.Goleador+=P.goleador*(changedSpec(p,"goleador",p.goleador)?fac:1);
   if(p.mvp&&ACT.mvp&&norm(p.mvp)===norm(ACT.mvp))bd.MVP+=P.mvp*(changedSpec(p,"mvp",p.mvp)?fac:1);
   if(p.joven&&ACT.joven&&norm(p.joven)===norm(ACT.joven))bd.Juvenil+=P.joven*(changedSpec(p,"joven",p.joven)?fac:1);
+  bd.Ajuste=Number(p.adj)||0;
   let total=0;Object.keys(bd).forEach(k=>{bd[k]=Math.round(bd[k]*10)/10;total+=bd[k];});
   return {total:Math.round(total*10)/10,bd};
 }
@@ -1078,7 +1084,7 @@ function renderDetail(){
   const groups=[
     ["Fase de grupos",[["J1","Jornada 1"],["J2","Jornada 2"],["J3","Jornada 3"],["Clasif","Clasificados"]]],
     ["Cuadro",[["Octavos","Octavos"],["Cuartos","Cuartos"],["Semis","Semis"],["Final","Final"],["Campeón","Campeón"]]],
-    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"]]]
+    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"],["Ajuste","Ajuste manual"]]]
   ];
   let h=`<div class="band" data-c="slate" style="margin-top:18px"><div class="be">Detalle de puntos</div><h2>${esc(p.name)} · ${total} pts</h2></div><div class="block">`;
   groups.forEach(([title,items])=>{
