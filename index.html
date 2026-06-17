@@ -188,6 +188,9 @@ input,select{font-family:var(--body)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .lockbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--line);padding:12px 14px;margin-bottom:16px;background:var(--surface);border-radius:var(--r)}
 .lockbar .st{font-family:var(--body);font-size:12px;color:var(--ink2);flex:1;min-width:200px}
+.tk.locked{opacity:.55}
+.tk.locked input{background:var(--line2);cursor:not-allowed}
+.brteam.lk{opacity:.6;cursor:not-allowed}
 .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);padding:6px 10px;font-size:12.5px;user-select:none;border-radius:var(--r2)}
 .chip .flag{width:18px;height:12px}
@@ -787,7 +790,7 @@ function renderLogin(){
   const rows=document.getElementById("playerRows");
   document.getElementById("loginTitle").textContent=PLAYERS.length?"Entrá al prode":"Empezá el prode";
   if(!PLAYERS.length){rows.innerHTML=`<div class="hint" style="padding:14px 0">Todavía no hay jugadores. Sé el primero 👇</div>`;}
-  else{rows.innerHTML=PLAYERS.map((p,i)=>`<button class="player-row" data-pid="${p.id}"><span class="pr-i">${String(i+1).padStart(2,"0")}</span><span class="pr-n">${esc(p.name)}</span><span class="pr-s">${p.pin?"🔒":""} ${p.locked?"cerrado":""}</span><span class="pr-go">→</span></button>`).join("");
+  else{rows.innerHTML=PLAYERS.map((p,i)=>`<button class="player-row" data-pid="${p.id}"><span class="pr-i">${String(i+1).padStart(2,"0")}</span><span class="pr-n">${esc(p.name)}</span><span class="pr-s">${p.pin?"🔒":""}</span><span class="pr-go">→</span></button>`).join("");
     rows.querySelectorAll(".player-row").forEach(b=>b.onclick=()=>tryEnter(b.dataset.pid));}
 }
 function tryEnter(pid){const p=PLAYERS.find(x=>x.id===pid);if(!p)return;if(p.pin){const g=prompt("PIN de "+p.name+":");if(g===null)return;if(g.trim()!==p.pin){toast("PIN incorrecto");return;}}enter(pid);}
@@ -858,14 +861,19 @@ function realBadge(m){const f=FIXMETA[m.id];if(!f)return "";
 function teamOptions(sel){let o=`<option value="">—</option>`;ALLTEAMS.forEach(t=>o+=`<option value="${t}" ${t===sel?"selected":""}>${t}</option>`);return o;}
 
 /* ===================== MI PRONÓSTICO ===================== */
+const KO_START={r16:"2026-06-28T16:00:00Z",qf:"2026-07-04T16:00:00Z",sf:"2026-07-14T19:00:00Z",fin:"2026-07-19T19:00:00Z"};
+const TOUR_FIRST="2026-06-11T16:00:00Z";
+function dlPassed(iso){if(!iso)return false;const t=new Date(iso).getTime();if(isNaN(t))return false;return Date.now()>=t-2*3600000;}
+function matchLocked(m){const f=FIXMETA[m.id];return f&&f.ts?dlPassed(f.ts):false;}
+function roundLocked(key){return dlPassed(KO_START[key]);}
+function specialsLocked(){return dlPassed(TOUR_FIRST);}
 function snapshot(p){return JSON.parse(JSON.stringify({bracket:p.bracket,fav:p.fav,rev:p.rev,goleador:p.goleador,mvp:p.mvp,joven:p.joven}));}
 function renderPron(){
   const v=document.getElementById("v-pron");const p=me();
   if(!p){v.innerHTML=`<div class="empty">No hay un jugador activo.</div>`;return;}
   const segs=[["marc","orange","Marcadores"],["cuad","blue","Cuadro"],["esp","yellow","Especiales"]];
-  v.innerHTML=`<div class="lockbar"><span class="st">${p.locked?`🔒 Cerrado · cambios en el cuadro y especiales suman al <b>${CFG.penalty}%</b>`:"🔓 Abierto · editá libre y cerrá antes del 1er partido"}</span><button class="btn sm" id="lockBtn">${p.locked?"Reabrir":"Cerrar pronóstico"}</button></div>
+  v.innerHTML=`<div class="lockbar"><span class="st">✏️ Editás cada parte de tu pronóstico hasta <b>2 horas antes</b> de cada partido; después queda bloqueada. Tus resultados cargados nunca se borran.</span></div>
   <div class="seg">${segs.map(s=>`<button data-seg="${s[0]}" data-c="${s[1]}" class="${PRON===s[0]?"on":""}">${s[2]}</button>`).join("")}</div><div id="pronInner"></div>`;
-  document.getElementById("lockBtn").onclick=async()=>{if(!p.locked){p.original=snapshot(p);p.locked=true;toast("Pronóstico cerrado");}else{if(!confirm("Reabrir borra el cierre: los cambios vuelven a valer 100%. ¿Seguir?"))return;p.locked=false;p.original=null;}await savePlayer(p);renderPron();};
   v.querySelectorAll("[data-seg]").forEach(b=>b.onclick=()=>{PRON=b.dataset.seg;renderPron();});
   const inner=document.getElementById("pronInner");
   if(PRON==="marc"){inner.innerHTML=marcView(p);wireMarc(p);}
@@ -873,15 +881,14 @@ function renderPron(){
   else{inner.innerHTML=espView(p);wireEsp(p);}
 }
 function marcView(p){
-  const dis=p.locked?"disabled":"";
   let done=MATCHES.filter(m=>{const s=p.scores[m.id];return s&&s.a!=null&&s.b!=null;}).length;
   let h=`<div class="band" data-c="orange"><div class="be">01 · Marcadores exactos</div><h2>Fase de grupos</h2><p>Tu resultado para los 72 partidos. Con esto se arma solo tu cuadro de cruces (incluidos los mejores terceros).</p><div class="bignum">72</div></div>`;
-  h+=`<div class="progress">Cargados <b>${done}</b>/72 partidos${p.locked?" · congelado por el cierre":""}</div><div class="grpgrid">`;
+  h+=`<div class="progress">Cargados <b>${done}</b>/72 partidos · cada partido se bloquea 2 h antes de empezar</div><div class="grpgrid">`;
   GLET.forEach(g=>{h+=`<div class="grp"><div class="gh"><span class="lt">${g}</span><span class="gt">Grupo ${g}</span></div>`;
     [1,2,3].forEach(md=>{h+=`<div class="md"><div class="mdh">Jornada ${md}</div>`;
-      MATCHES.filter(m=>m.g===g&&mdOf(m)===md).forEach(m=>{const s=p.scores[m.id]||{};
+      MATCHES.filter(m=>m.g===g&&mdOf(m)===md).forEach(m=>{const s=p.scores[m.id]||{};const dis=matchLocked(m)?"disabled":"";
         h+=realBadge(m);
-        h+=`<div class="tk"><div class="tm r">${teamSpan(m.a)}</div><div class="score"><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="a" value="${s.a??""}"><span class="x">:</span><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="b" value="${s.b??""}"></div><div class="tm">${teamSpan(m.b)}</div></div>`;});
+        h+=`<div class="tk ${dis?"locked":""}"><div class="tm r">${teamSpan(m.a)}</div><div class="score"><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="a" value="${s.a??""}"><span class="x">:</span><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="b" value="${s.b??""}"></div><div class="tm">${teamSpan(m.b)}</div></div>`;});
       h+=`</div>`;});h+=`</div>`;});
   return h+`</div>`;
 }
@@ -897,7 +904,7 @@ function cuadView(p){
   }
   const q=bs.q;
   h+=`<div class="block"><h3>8 mejores terceros</h3><div class="thirds">${q.thirdsObj.map(o=>`<span class="tchip">${flag(o.t)} ${o.t} <span class="small" style="color:var(--mut)">${o.pts}p ${o.dif>0?"+":""}${o.dif}</span></span>`).join("")}</div></div>`;
-  h+=`<div class="block"><h3>Cuadro</h3>${p.locked?'<p class="lock-note">Cerrado: los equipos que cambies vs tu pronóstico original (borde ámbar) suman al '+CFG.penalty+'%.</p>':""}<p class="hint-row">La barra y el % muestran cuántos del grupo eligieron a cada equipo.</p><div class="bracket">`;
+  h+=`<div class="block"><h3>Cuadro</h3><p class="hint-row">Tocá el equipo que pasa en cada llave. Cada ronda se bloquea 2 h antes de su primer partido. La barra y el % muestran cuántos del grupo eligieron a cada equipo.</p><div class="bracket">`;
   const bets=betStats();
   bs.cols.forEach((col,r)=>{
     h+=`<div class="bcol"><div class="ch">${COLNAMES[r]}</div>`;
@@ -911,29 +918,29 @@ function cuadView(p){
 function betStats(){const map={};PLAYERS.forEach(p=>{const b=p.bracket||{};Object.keys(b).forEach(key=>{const t=b[key];if(!t)return;map[key]=map[key]||{__total:0};map[key][t]=(map[key][t]||0)+1;map[key].__total++;});});return map;}
 function brTeam(p,team,winner,r,m,bets){
   if(!team)return `<div class="brteam empty">—</div>`;
-  const isW=winner===team;const key=SETKEYS[r];
-  const chg=isW&&changedRound(p,key,team);
+  const isW=winner===team;const lk=roundLocked(SETKEYS[r]);
   const st=bets&&bets[r+"-"+m];let bar="",pct="";
   if(st&&st.__total){const pc=Math.round((st[team]||0)/st.__total*100);bar=`<span class="obar" style="width:${pc}%"></span>`;pct=`<span class="opct">${pc}%</span>`;}
-  return `<button class="brteam ${isW?"win":""} ${chg?"chg":""}" data-br="${r}-${m}" data-team="${team}">${bar}${flag(team)}<span class="nm">${team}</span>${pct}</button>`;
+  return `<button class="brteam ${isW?"win":""} ${lk?"lk":""}" ${lk?"disabled":""} data-br="${r}-${m}" data-team="${team}">${bar}${flag(team)}<span class="nm">${team}</span>${pct}</button>`;
 }
 function wireCuad(p){
-  document.querySelectorAll("#pronInner [data-br]").forEach(btn=>btn.onclick=async()=>{const[r,m]=btn.dataset.br.split("-");p.bracket=p.bracket||{};p.bracket[r+"-"+m]=btn.dataset.team;cleanBracket(p);await savePlayer(p);renderPron();});
+  document.querySelectorAll("#pronInner [data-br]").forEach(btn=>btn.onclick=async()=>{const[r,m]=btn.dataset.br.split("-");if(roundLocked(SETKEYS[r])){toast("Esta ronda ya está bloqueada");return;}p.bracket=p.bracket||{};p.bracket[r+"-"+m]=btn.dataset.team;cleanBracket(p);await savePlayer(p);renderPron();});
 }
 
 function espView(p){
-  const fav=p.fav||[],rev=p.rev||[];
+  const fav=p.fav||[],rev=p.rev||[];const lk=specialsLocked(),dis=lk?"disabled":"";
   let h=`<div class="band" data-c="yellow"><div class="be">05·06·07·08·09 · Especiales</div><h2>Apuestas del torneo</h2><p>Favoritos (suman si llegan a semis) · revelación (si llegan a cuartos) · goleador, MVP y juvenil. Elegí de la lista o tipeá.</p><div class="bignum">★</div></div>`;
+  if(lk)h+=`<div class="progress" style="border-color:var(--mut)">🔒 Las apuestas especiales se bloquearon al empezar el torneo.</div>`;
   h+=`<div class="block"><div class="grid2">
     <div><div class="fl">06 · Favoritos (las candidatas según las cuotas de hoy)</div>
-      ${selPool("fav0",fav[0],FAVORITES)}${selPool("fav1",fav[1],FAVORITES)}</div>
+      ${selPool("fav0",fav[0],FAVORITES,dis)}${selPool("fav1",fav[1],FAVORITES,dis)}</div>
     <div><div class="fl">05 · Revelación (sorpresas, sin las candidatas)</div>
-      ${selPool("rev0",rev[0],REVELACION)}${selPool("rev1",rev[1],REVELACION)}</div>
+      ${selPool("rev0",rev[0],REVELACION,dis)}${selPool("rev1",rev[1],REVELACION,dis)}</div>
   </div></div>`;
   h+=`<div class="block"><div class="grid2">
-    <div><div class="fl">07 · Goleador</div><input class="inp" id="sp-goleador" list="dlGol" value="${esc(p.goleador)}" placeholder="Elegí o tipeá">${chgNote(p,"goleador")}</div>
-    <div><div class="fl">08 · MVP (Balón de Oro)</div><input class="inp" id="sp-mvp" list="dlMvp" value="${esc(p.mvp)}" placeholder="Elegí o tipeá">${chgNote(p,"mvp")}</div>
-    <div><div class="fl">09 · Mejor juvenil (Golden Boy)</div><input class="inp" id="sp-joven" list="dlJov" value="${esc(p.joven)}" placeholder="Elegí o tipeá">${chgNote(p,"joven")}</div>
+    <div><div class="fl">07 · Goleador</div><input class="inp" id="sp-goleador" list="dlGol" ${dis} value="${esc(p.goleador)}" placeholder="Elegí o tipeá"></div>
+    <div><div class="fl">08 · MVP (Balón de Oro)</div><input class="inp" id="sp-mvp" list="dlMvp" ${dis} value="${esc(p.mvp)}" placeholder="Elegí o tipeá"></div>
+    <div><div class="fl">09 · Mejor juvenil (Golden Boy)</div><input class="inp" id="sp-joven" list="dlJov" ${dis} value="${esc(p.joven)}" placeholder="Elegí o tipeá"></div>
     <div></div></div>
     <datalist id="dlGol">${GOLEADORES.map(n=>`<option value="${n}">`).join("")}</datalist>
     <datalist id="dlMvp">${MVPS.map(n=>`<option value="${n}">`).join("")}</datalist>
@@ -941,8 +948,7 @@ function espView(p){
     <p class="small" style="margin-top:10px">Listas armadas con las encuestas y cuotas de junio 2026. Igual podés escribir cualquier otro nombre.</p></div>`;
   return h;
 }
-function selPool(id,val,pool){return `<select class="sel" data-spec="${id}" style="margin-bottom:8px"><option value="">—</option>${pool.map(t=>`<option ${t===val?"selected":""}>${t}</option>`).join("")}</select>`;}
-function chgNote(p,k){return (p[k]&&changedSpec(p,k,p[k]))?'<p class="lock-note">Modificado tras el cierre</p>':"";}
+function selPool(id,val,pool,dis){return `<select class="sel" ${dis||""} data-spec="${id}" style="margin-bottom:8px"><option value="">—</option>${pool.map(t=>`<option ${t===val?"selected":""}>${t}</option>`).join("")}</select>`;}
 function wireEsp(p){
   function setPair(field,id0,id1){const v0=document.querySelector(`[data-spec="${id0}"]`).value,v1=document.querySelector(`[data-spec="${id1}"]`).value;const arr=[v0,v1].filter((x,i,a)=>x&&a.indexOf(x)===i);p[field]=arr;}
   ["fav0","fav1"].forEach(id=>{const el=document.querySelector(`[data-spec="${id}"]`);if(el)el.onchange=async()=>{setPair("fav","fav0","fav1");await savePlayer(p);renderPron();};});
@@ -1035,7 +1041,7 @@ function wireReal(){
 function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();}
 function sign(a,b){return a>b?1:a<b?-1:0;}
 function computePoints(p){
-  const P=CFG.points,fac=CFG.penalty/100;
+  const P=CFG.points;
   const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,Ajuste:0};
   MATCHES.forEach(m=>{const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;
     const k="J"+m.md;if(ps.a===as.a&&ps.b===as.b)bd[k]+=P.exact;else if(sign(ps.a,ps.b)===sign(as.a,as.b))bd[k]+=P.outcome;});
@@ -1047,13 +1053,13 @@ function computePoints(p){
   }
   const ds=derivedSets(p);
   const rmap={r16:["Octavos",P.r16],qf:["Cuartos",P.qf],sf:["Semis",P.sf],fin:["Final",P.fin]};
-  Object.keys(rmap).forEach(k=>{const[lab,val]=rmap[k];(ds[k]||[]).forEach(t=>{if((ACT.rounds[k]||[]).includes(t))bd[lab]+=val*(changedRound(p,k,t)?fac:1);});});
-  if(ds.champ&&ACT.champ&&ds.champ===ACT.champ)bd.Campeón+=P.champ*(changedRound(p,"champ",ds.champ)?fac:1);
-  (p.fav||[]).forEach(t=>{if((ACT.rounds.sf||[]).includes(t))bd.Favoritos+=P.fav*(changedSpec(p,"fav",t)?fac:1);});
-  (p.rev||[]).forEach(t=>{if((ACT.rounds.qf||[]).includes(t))bd.Revelación+=P.rev*(changedSpec(p,"rev",t)?fac:1);});
-  if(p.goleador&&ACT.goleador&&norm(p.goleador)===norm(ACT.goleador))bd.Goleador+=P.goleador*(changedSpec(p,"goleador",p.goleador)?fac:1);
-  if(p.mvp&&ACT.mvp&&norm(p.mvp)===norm(ACT.mvp))bd.MVP+=P.mvp*(changedSpec(p,"mvp",p.mvp)?fac:1);
-  if(p.joven&&ACT.joven&&norm(p.joven)===norm(ACT.joven))bd.Juvenil+=P.joven*(changedSpec(p,"joven",p.joven)?fac:1);
+  Object.keys(rmap).forEach(k=>{const[lab,val]=rmap[k];(ds[k]||[]).forEach(t=>{if((ACT.rounds[k]||[]).includes(t))bd[lab]+=val;});});
+  if(ds.champ&&ACT.champ&&ds.champ===ACT.champ)bd.Campeón+=P.champ;
+  (p.fav||[]).forEach(t=>{if((ACT.rounds.sf||[]).includes(t))bd.Favoritos+=P.fav;});
+  (p.rev||[]).forEach(t=>{if((ACT.rounds.qf||[]).includes(t))bd.Revelación+=P.rev;});
+  if(p.goleador&&ACT.goleador&&norm(p.goleador)===norm(ACT.goleador))bd.Goleador+=P.goleador;
+  if(p.mvp&&ACT.mvp&&norm(p.mvp)===norm(ACT.mvp))bd.MVP+=P.mvp;
+  if(p.joven&&ACT.joven&&norm(p.joven)===norm(ACT.joven))bd.Juvenil+=P.joven;
   bd.Ajuste=Number(p.adj)||0;
   let total=0;Object.keys(bd).forEach(k=>{bd[k]=Math.round(bd[k]*10)/10;total+=bd[k];});
   return {total:Math.round(total*10)/10,bd};
@@ -1071,7 +1077,7 @@ function renderTabla(){
   h+=`<div class="lead-hero"><div><div class="e">Puntero</div><div class="n">${lead.sc.total>0?esc(lead.p.name):"—"}</div></div><div class="lh-r">${lead.sc.total}<small>PUNTOS</small></div></div>`;
   h+=`<div style="overflow-x:auto"><table class="ltbl"><tr><th></th><th style="text-align:left">Jugador</th><th>J1</th><th>J2</th><th>J3</th><th>Cuadro</th><th>Espec.</th><th>Total</th></tr>`;
   h+=rows.map((r,i)=>{const b=r.sc.bd;const cuadro=Math.round((b.Clasif+b.Octavos+b.Cuartos+b.Semis+b.Final+b.Campeón)*10)/10;const esp=Math.round((b.Favoritos+b.Revelación+b.Goleador+b.MVP+b.Juvenil)*10)/10;
-    return `<tr class="clk ${r.p.id===ME?"me":""}" data-d="${r.p.id}"><td class="rk ${i===0?"g1":""}">${i+1}</td><td class="nm">${esc(r.p.name)} ${r.p.locked?"":'<span class="badge">abierto</span>'}</td><td>${b.J1}</td><td>${b.J2}</td><td>${b.J3}</td><td>${cuadro}</td><td>${esp}</td><td class="tot">${r.sc.total}</td></tr>`;}).join("");
+    return `<tr class="clk ${r.p.id===ME?"me":""}" data-d="${r.p.id}"><td class="rk ${i===0?"g1":""}">${i+1}</td><td class="nm">${esc(r.p.name)}</td><td>${b.J1}</td><td>${b.J2}</td><td>${b.J3}</td><td>${cuadro}</td><td>${esp}</td><td class="tot">${r.sc.total}</td></tr>`;}).join("");
   h+=`</table></div><div id="detailBody"></div>`;v.innerHTML=h;
   document.getElementById("refreshBtn").onclick=async()=>{await loadPlayers();await syncLive();renderTabla();toast("Actualizado");};
   v.querySelectorAll("tr[data-d]").forEach(tr=>tr.onclick=()=>{openDetail=openDetail===tr.dataset.d?null:tr.dataset.d;renderDetail();});
@@ -1102,7 +1108,7 @@ function renderReglas(){
   const v=document.getElementById("v-reglas");const ed=ORG;
   let h=`<div class="band" data-c="slate"><div class="be">03 · Cómo se suma</div><h2>Reglamento</h2><p>${ed?"Editá los puntajes; valen para todo el grupo.":"Solo el organizador puede cambiar los puntajes."}</p><div class="bignum">PTS</div></div>`;
   h+=`<div class="rules">${RULE_DEFS.map(([k,l])=>`<div class="rule"><div class="rl">${l}</div><div class="ri">${ed?`<input type="number" data-pk="${k}" value="${CFG.points[k]}" min="0">`:`<span class="v">${CFG.points[k]}</span>`}<span class="u">pts</span></div></div>`).join("")}</div>`;
-  h+=`<div class="block" style="margin-top:16px;border-color:var(--amber)"><h3 style="color:var(--amber)">Penalización por modificar</h3><p class="sub">Tras cerrar, podés rehacer el cuadro y los especiales viendo la fase de grupos, pero cada equipo que cambiaste y acertás suma solo este porcentaje. El que no toca nada cobra 100%.</p><div class="ri" style="display:flex;align-items:baseline;gap:8px">${ed?`<input type="number" id="penInput" min="0" max="100" step="5" value="${CFG.penalty}" style="width:80px;font-family:var(--disp);font-size:26px;text-align:center;border:1px solid var(--amber);background:var(--bg);padding:2px 0">`:`<span class="v" style="color:var(--amber)">${CFG.penalty}</span>`}<span class="u">% de los puntos</span></div></div>`;
+  h+=`<div class="block" style="margin-top:16px;border-color:var(--amber)"><h3 style="color:var(--amber)">Cierre por horario</h3><p class="sub">Cada parte del pronóstico se puede editar hasta <b>2 horas antes</b> del partido correspondiente y después queda bloqueada automáticamente: cada partido de grupos 2 h antes de empezar, cada ronda del cuadro 2 h antes de su primer partido, y los especiales al arrancar el torneo. No hay descuento de puntos: lo que está en plazo vale full, lo que se pasó no se puede tocar.</p></div>`;
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
@@ -1110,7 +1116,6 @@ function renderReglas(){
   if(ed){
     wireParticipants(v);
     v.querySelectorAll("input[data-pk]").forEach(inp=>inp.addEventListener("change",async()=>{CFG.points[inp.dataset.pk]=parseInt(inp.value)||0;await saveCfg();toast("Reglamento guardado");}));
-    const pen=document.getElementById("penInput");if(pen)pen.onchange=async()=>{CFG.penalty=Math.max(0,Math.min(100,parseInt(pen.value)||0));pen.value=CFG.penalty;await saveCfg();toast("Guardado");};
     const rb=document.getElementById("resetAll");if(rb)rb.onclick=async()=>{if(!confirm("¿Borrar TODOS los jugadores, pronósticos y resultados?"))return;const keys=await store.list("p:");for(const k of keys)await store.del(k);await store.del("act");await store.setMe(null);CFG.points={...DEFAULT_POINTS};CFG.penalty=60;await saveCfg();ACT={scores:{},rounds:{r16:[],qf:[],sf:[],fin:[]},champ:"",goleador:"",mvp:"",joven:"",bracket:{}};PLAYERS=[];ME=null;ORG=false;document.getElementById("app").style.display="none";document.getElementById("login").classList.remove("hidden");renderLogin();toast("Todo borrado");};
   }
 }
