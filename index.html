@@ -1005,7 +1005,9 @@ const TOUR_FIRST="2026-06-11T16:00:00Z";
 function dlPassed(iso){if(!iso)return false;const t=new Date(iso).getTime();if(isNaN(t))return false;return Date.now()>=t-2*3600000;}
 function matchLocked(m){const f=FIXMETA[m.id];return f&&f.ts?dlPassed(f.ts):false;}
 function roundLocked(key){return dlPassed(KO_START[key]);}
-function specialsLocked(){return dlPassed(TOUR_FIRST);}
+function artToday(){try{return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Argentina/Buenos_Aires"}).format(new Date());}catch(e){return TODAY||new Date().toISOString().slice(0,10);}}
+function specialsLastDay(){let d="";MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.md===2&&f.artDate&&f.artDate>d)d=f.artDate;});return d||"2026-06-23";} // último día de la 2ª fecha (fase de grupos)
+function specialsLocked(){return artToday()>specialsLastDay();} // editable durante toda la 2ª fecha; se cierra al día siguiente
 function snapshot(p){return JSON.parse(JSON.stringify({bracket:p.bracket,fav:p.fav,rev:p.rev,goleador:p.goleador,mvp:p.mvp,joven:p.joven}));}
 function renderPron(){
   const v=document.getElementById("v-pron");const p=me();
@@ -1069,7 +1071,8 @@ function wireCuad(p){
 function espView(p){
   const fav=p.fav||[],rev=p.rev||[];const lk=specialsLocked(),dis=lk?"disabled":"";
   let h=`<div class="band" data-c="yellow"><div class="be">05·06·07·08·09 · Especiales</div><h2>Apuestas del torneo</h2><p>Favoritos (suman si llegan a semis) · revelación (si llegan a cuartos) · goleador, MVP y juvenil. Elegí de la lista o tipeá.</p><div class="bignum">★</div></div>`;
-  if(lk)h+=`<div class="progress" style="border-color:var(--mut)">🔒 Las apuestas especiales se bloquearon al empezar el torneo.</div>`;
+  if(lk)h+=`<div class="progress" style="border-color:var(--mut)">🔒 Las apuestas especiales se cerraron al terminar la 2ª fecha de la fase de grupos.</div>`;
+  else h+=`<div class="progress">Podés editar las especiales hasta que termina la 2ª fecha de la fase de grupos (${fmtD(specialsLastDay())}).</div>`;
   h+=`<div class="block"><div class="grid2">
     <div><div class="fl">06 · Favoritos (las candidatas según las cuotas de hoy)</div>
       ${selPool("fav0",fav[0],FAVORITES,dis)}${selPool("fav1",fav[1],FAVORITES,dis)}</div>
@@ -1247,7 +1250,7 @@ function renderReglas(){
   const v=document.getElementById("v-reglas");const ed=ORG;
   let h=`<div class="band" data-c="slate"><div class="be">03 · Cómo se suma</div><h2>Reglamento</h2><p>${ed?"Editá los puntajes; valen para todo el grupo.":"Solo el organizador puede cambiar los puntajes."}</p><div class="bignum">PTS</div></div>`;
   h+=`<div class="rules">${RULE_DEFS.map(([k,l])=>`<div class="rule"><div class="rl">${l}</div><div class="ri">${ed?`<input type="number" data-pk="${k}" value="${CFG.points[k]}" min="0">`:`<span class="v">${CFG.points[k]}</span>`}<span class="u">pts</span></div></div>`).join("")}</div>`;
-  h+=`<div class="block" style="margin-top:16px;border-color:var(--amber)"><h3 style="color:var(--amber)">Cierre por horario</h3><p class="sub">Cada parte del pronóstico se puede editar hasta <b>2 horas antes</b> del partido correspondiente y después queda bloqueada automáticamente: cada partido de grupos 2 h antes de empezar, cada ronda del cuadro 2 h antes de su primer partido, y los especiales al arrancar el torneo. No hay descuento de puntos: lo que está en plazo vale full, lo que se pasó no se puede tocar.</p></div>`;
+  h+=`<div class="block" style="margin-top:16px;border-color:var(--amber)"><h3 style="color:var(--amber)">Cierre por horario</h3><p class="sub">Cada parte del pronóstico se puede editar hasta <b>2 horas antes</b> del partido correspondiente y después queda bloqueada automáticamente: cada partido de grupos 2 h antes de empezar, cada ronda del cuadro 2 h antes de su primer partido, y los especiales (campeón, goleador, MVP, favoritos, etc.) hasta que termina la 2ª fecha de la fase de grupos. No hay descuento de puntos: lo que está en plazo vale full, lo que se pasó no se puede tocar.</p></div>`;
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
