@@ -474,7 +474,12 @@ function ingestEvents(evs){evs.forEach(e=>{
     if(isFinal(st)&&ls){LIVE.scores[m.id]={a:ls.a,b:ls.b};}}
   else if(isFinal(st)&&sh!=null&&sa!=null&&date>="2026-06-28"){let w=null;if(sh>sa)w=H;else if(sa>sh)w=A;if(w)LIVE.ko.push({date,win:w});}
 });}
-function recomputeMatchdays(){GLET.forEach(g=>{const ms=MATCHES.filter(x=>x.g===g&&FIXMETA[x.id]&&FIXMETA[x.id].ts).sort((p,q)=>FIXMETA[p.id].ts<FIXMETA[q.id].ts?-1:1);ms.forEach((x,i)=>FIXMETA[x.id].md=Math.floor(i/2)+1);});}
+function recomputeMatchdays(){GLET.forEach(g=>{
+  const ms=MATCHES.filter(x=>x.g===g&&FIXMETA[x.id]&&FIXMETA[x.id].ts);
+  if(ms.length<6)return; // sin los 6 partidos del grupo no infiero, evito jornadas parciales erróneas
+  ms.sort((p,q)=>FIXMETA[p.id].ts.localeCompare(FIXMETA[q.id].ts));
+  ms.forEach((x,i)=>FIXMETA[x.id].md=Math.floor(i/2)+1);
+});}
 function topScorers(n){const agg={};Object.keys(GOALS).forEach(eid=>GOALS[eid].forEach(g=>{const k=g.p+"|"+g.team;agg[k]=agg[k]||{p:g.p,team:g.team,goals:0};agg[k].goals++;}));
   return Object.values(agg).sort((a,b)=>b.goals-a.goals||a.p.localeCompare(b.p)).slice(0,n||10);}
 function mdOf(m){return (FIXMETA[m.id]&&FIXMETA[m.id].md)||m.md;}
@@ -493,8 +498,9 @@ async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSync
     const cached=Object.keys(FIXMETA).length;
     const needFull=opts.full||lsGet("prode_fullscan")!==today||cached<20;
     let dates;
-    if(needFull&&cached<20)dates=dateRange(TOUR_START,clampDate(offsetDay(today,4)));      // primera vez: desde el inicio hasta hoy+4
-    else if(needFull)dates=dateRange(clampDate(offsetDay(today,-4)),clampDate(offsetDay(today,4))); // refresco diario: ventana de 9 días
+    const GROUPS_END="2026-06-27";
+    if(needFull&&today<=GROUPS_END)dates=dateRange(TOUR_START,clampDate(offsetDay(today,4)>GROUPS_END?offsetDay(today,4):GROUPS_END)); // durante grupos: toda la fase (fija las jornadas por fecha real)
+    else if(needFull)dates=dateRange(clampDate(offsetDay(today,-4)),clampDate(offsetDay(today,4))); // refresco diario fuera de grupos
     else dates=dateRange(clampDate(offsetDay(today,-1)),clampDate(offsetDay(today,2)));    // polling: ayer..+2
     for(const d of dates){ingestEvents(await fetchDay(d));if(needFull)await new Promise(r=>setTimeout(r,140));}
     TODAYGAMES.sort((x,y)=>(x.time||"99").localeCompare(y.time||"99"));
@@ -886,7 +892,7 @@ function marcView(p){
   h+=`<div class="progress">Cargados <b>${done}</b>/72 partidos · cada partido se bloquea 2 h antes de empezar</div><div class="grpgrid">`;
   GLET.forEach(g=>{h+=`<div class="grp"><div class="gh"><span class="lt">${g}</span><span class="gt">Grupo ${g}</span></div>`;
     [1,2,3].forEach(md=>{h+=`<div class="md"><div class="mdh">Jornada ${md}</div>`;
-      MATCHES.filter(m=>m.g===g&&mdOf(m)===md).forEach(m=>{const s=p.scores[m.id]||{};const dis=matchLocked(m)?"disabled":"";
+      MATCHES.filter(m=>m.g===g&&mdOf(m)===md).sort((a,b)=>{const fa=(FIXMETA[a.id]||{}).ts||"",fb=(FIXMETA[b.id]||{}).ts||"";return fa.localeCompare(fb);}).forEach(m=>{const s=p.scores[m.id]||{};const dis=matchLocked(m)?"disabled":"";
         h+=realBadge(m);
         h+=`<div class="tk ${dis?"locked":""}"><div class="tm r">${teamSpan(m.a)}</div><div class="score"><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="a" value="${s.a??""}"><span class="x">:</span><input type="number" min="0" max="20" ${dis} data-mid="${m.id}" data-side="b" value="${s.b??""}"></div><div class="tm">${teamSpan(m.b)}</div></div>`;});
       h+=`</div>`;});h+=`</div>`;});
