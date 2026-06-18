@@ -305,6 +305,24 @@ input,select{font-family:var(--body)}
 .hm-refresh{border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:6px;font-size:12px;padding:0 6px;cursor:pointer;margin-left:4px;line-height:1.6}
 .hm-refresh:hover{border-color:var(--ink2)}
 .hm-pf{padding:2px 0 8px;border-bottom:1px solid var(--line2);margin-bottom:4px}
+.tovl{position:fixed;inset:0;background:rgba(20,20,20,.97);z-index:200;display:none;align-items:center;justify-content:center;padding:18px}
+.tcard{width:100%;max-width:440px;background:var(--surface);border-radius:18px;padding:22px}
+.tprog{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+.tkind{color:var(--amber);text-align:right}
+.ttimer{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:18px}
+.tbar{height:100%;width:100%;background:var(--red)}
+.tq{font-size:19px;font-weight:700;line-height:1.25;margin-bottom:18px;font-family:var(--disp)}
+.topts{display:grid;gap:9px}
+.topt{border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:13px 15px;font-size:15px;text-align:left;cursor:pointer;font-family:var(--body);color:var(--ink)}
+.topt:active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tinp{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.tinp input{flex:1;border:1px solid var(--line);border-radius:11px;padding:13px 15px;font-size:18px;font-weight:700;font-family:var(--disp);width:100%;box-sizing:border-box}
+.tunit{font-size:13px;color:var(--mut);flex-shrink:0}
+.tok{width:100%}
+.trow{padding:9px 0;border-bottom:1px solid var(--line2)}
+.trow:last-child{border-bottom:none}
+.trq{font-size:13px;font-weight:600}
+.tra{font-size:13px;color:var(--ink2);margin-top:3px}
 .hm-pfn{font-family:var(--disp);font-weight:800;font-size:16px;line-height:1.1}
 .hm-pfr{font-size:11px;color:var(--mut);margin-top:2px}
 .pstats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
@@ -418,6 +436,7 @@ input,select{font-family:var(--body)}
     <section class="view" id="v-home"></section>
     <section class="view" id="v-pron"></section>
     <section class="view" id="v-tabla"></section>
+    <section class="view" id="v-trivia"></section>
     <section class="view" id="v-reglas"></section>
     <section class="view" id="v-real"></section>
   </div>
@@ -507,7 +526,7 @@ function uid(){return Math.random().toString(36).slice(2,9);}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1600);}
 function esc(s){return (s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
 function flag(t){const c=CODE[t];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="" loading="lazy">`:`<span class="flag noflag"></span>`;}
-function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",adj:Number(p.adj)||0,x2:p.x2||{},koScores:p.koScores||{},x2ko:p.x2ko||"",original:p.original||null};}
+function normPlayer(p){return{id:p.id||uid(),name:p.name||"?",pin:p.pin||"",locked:!!p.locked,scores:p.scores||{},bracket:p.bracket||{},fav:p.fav||[],rev:p.rev||[],goleador:p.goleador||"",mvp:p.mvp||"",joven:p.joven||"",adj:Number(p.adj)||0,x2:p.x2||{},koScores:p.koScores||{},x2ko:p.x2ko||"",trivia:p.trivia||{},welcome:!!p.welcome,original:p.original||null};}
 
 /* ===================== RESULTADOS EN VIVO (auto · fuente: ESPN) ===================== */
 const LIVE_BASE="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
@@ -545,7 +564,7 @@ const TOUR_START="2026-06-11",TOUR_END="2026-07-19";
 function clampDate(s){return s<TOUR_START?TOUR_START:(s>TOUR_END?TOUR_END:s);}
 function dateRange(a,b){const out=[],d=new Date(a+"T00:00:00Z"),end=new Date(b+"T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
 function offsetDay(today,n){const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
-let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},MEDALS={};
+let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},MEDALS={},TRIVIA_WINS={};
 const MEDAL_PTS=3; // puntos por cada medalla (MVP del día)
 function pairKey(a,b){return [a,b].sort().join("~");}
 function artParts(iso){
@@ -643,11 +662,13 @@ async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSync
     if(needFull)lsSet("prode_fullscan",today);
     recomputeMatchdays();
     try{computeMedals();}catch(e){}
+    try{computeTriviaWins();}catch(e){}
     let changed=applyLiveToAct();if(changed)await saveAct();
     try{queueResultPopups();}catch(e){}
     try{queueReminderPopup();}catch(e){}
     if(changed)try{evalRankPopups();}catch(e){}
     try{queueMvpPopup();}catch(e){}
+    try{queueWelcomePopup();}catch(e){}
     const fj=JSON.stringify(FIXMETA);if(fj!==FIXMETA_JSON){FIXMETA_JSON=fj;await store.set("fixmeta",fj);changed=true;}
     const gj=JSON.stringify(GOALS);if(gj!==GOALS_JSON){GOALS_JSON=gj;await store.set("goals",gj);}
     lastSync=Date.now();return changed;
@@ -662,6 +683,12 @@ async function initLive(){try{await syncLive();}catch(e){}if(document.getElement
 /* ===================== POPUPS CANCIONES ===================== */
 const ARG_TEAM="Argentina";
 const SONGS={
+ welcome:[
+  ["Hello, Goodbye","The Beatles","Recién llegás y ya sumás 20. Bienvenido al prode."],
+  ["Supersonic","Oasis","Arrancás con envión: 20 puntos de regalo."],
+  ["Juguetes perdidos","Redonditos de Ricota","Te sumás con 20 de arranque. A jugar."],
+  ["Last Nite","The Strokes","Entraste hoy y ya tenés 20. Dale que se puede."]
+ ],
  exact:[
   ["Todo un palo","Redonditos de Ricota","La clavaste justa. Bancá que esto se festeja."],
   ["Ji ji ji","Redonditos de Ricota","Resultado exacto. Saltá que la pegaste."],
@@ -749,7 +776,7 @@ const SONGS={
 };
 function pickSong(a){return a[Math.floor(Math.random()*a.length)];}
 let popupQueue=[], popupOpen=false, wasLeader=false, currentPopup=null;
-const POP_ACCENT={exact:"#00824C",win:"#00824C",miss:"#E4002B",thrash:"#E4002B",live:"#1E50FF",arg:"#1E50FF",lead:"#C8841C",save:"#1E50FF",remind:"#C8841C",climb:"#00824C",drop:"#E4002B",close:"#C8841C",mvp:"#C8841C"};
+const POP_ACCENT={welcome:"#1E50FF",exact:"#00824C",win:"#00824C",miss:"#E4002B",thrash:"#E4002B",live:"#1E50FF",arg:"#1E50FF",lead:"#C8841C",save:"#1E50FF",remind:"#C8841C",climb:"#00824C",drop:"#E4002B",close:"#C8841C",mvp:"#C8841C"};
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function popKey(id){return "prode_seen_"+(ME||"x")+"_"+id;}
@@ -939,6 +966,11 @@ function playerStats(p){
   const hit=exact+outcome,pct=played?Math.round(hit/played*100):0;
   return {exact,outcome,miss,played,hit,pct,bestDay,medals:MEDALS[p.id]||0,total:computePoints(p).total,rank:playerRank(p.id)};
 }
+function queueWelcomePopup(){
+  if(!ME)return;const p=me();if(!p||!p.welcome)return;
+  const flag="prode_welcome_"+ME;if(lsGet(flag))return;lsSet(flag,"1");
+  enqueuePopup("welcome",`<span>Arrancás con <b>${WELCOME_PTS} puntos</b> de bienvenida</span>`,{l1:`+${WELCOME_PTS} de bienvenida`,l2:"Bienvenido al prode"});
+}
 function queueMvpPopup(){
   if(!ME||!lsGet("prode_init_"+ME))return;
   const day=lastClosedDay();if(!day)return;
@@ -1056,7 +1088,7 @@ document.getElementById("createBtn").onclick=async()=>{
   if(!n){toast("Escribí un nombre");return;}
   if(PLAYERS.some(p=>p.name.toLowerCase()===n.toLowerCase())){toast("Ese nombre ya existe");return;}
   if(pin&&!/^\d{4}$/.test(pin)){toast("El PIN debe ser 4 dígitos");return;}
-  const p=normPlayer({id:uid(),name:n,pin});await savePlayer(p);PLAYERS.push(p);await enter(p.id);
+  const p=normPlayer({id:uid(),name:n,pin,welcome:true});await savePlayer(p);PLAYERS.push(p);await enter(p.id);
 };
 document.getElementById("orgLink").onclick=()=>ensureOrg(true);
 async function ensureOrg(fromLogin){
@@ -1070,7 +1102,7 @@ async function ensureOrg(fromLogin){
 /* ===================== SHELL ===================== */
 function showApp(){document.getElementById("login").classList.add("hidden");document.getElementById("app").style.display="block";buildNav();updateChip();setView(VIEW);}
 function updateChip(){const p=me();document.getElementById("uname").textContent=p?p.name:"—";document.getElementById("udot").className="dot"+(ORG?" org":"");document.getElementById("orgToggle").textContent=ORG?"⚙ Org ✓":"⚙ Org";}
-const NAVDEF=[{k:"home",c:"blue",n:"00",l:"Inicio"},{k:"pron",c:"orange",n:"01",l:"Mi pronóstico"},{k:"tabla",c:"green",n:"02",l:"Tabla"},{k:"reglas",c:"slate",n:"03",l:"Reglamento"},{k:"real",c:"magenta",n:"04",l:"Resultados",org:true}];
+const NAVDEF=[{k:"home",c:"blue",n:"00",l:"Inicio"},{k:"pron",c:"orange",n:"01",l:"Mi pronóstico"},{k:"tabla",c:"green",n:"02",l:"Tabla"},{k:"trivia",c:"magenta",n:"03",l:"Trivia"},{k:"reglas",c:"slate",n:"04",l:"Reglamento"},{k:"real",c:"magenta",n:"05",l:"Resultados",org:true}];
 function buildNav(){const nav=document.getElementById("nav");nav.innerHTML=NAVDEF.filter(t=>!t.org||ORG).map(t=>`<button data-k="${t.k}" data-c="${t.c}" class="${t.k===VIEW?"active":""}"><span class="nn">${t.n}</span><span class="nl">${t.l}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>setView(b.dataset.k));}
 function setView(k){VIEW=k;document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.k===k));document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));document.getElementById("v-"+k).classList.add("active");render();}
 document.getElementById("logoutBtn").onclick=async()=>{ME=null;ORG=false;await store.setMe(null);document.getElementById("app").style.display="none";document.getElementById("login").classList.remove("hidden");await loadPlayers();renderLogin();};
@@ -1086,7 +1118,7 @@ async function editProfile(){
 async function refreshAssists(){lsSet("prode_assists","");toast("Actualizando asistencias…");const ok=await fetchAssists();if(VIEW==="home")renderHome();toast(ok?"Asistencias actualizadas":"No se pudieron actualizar ahora");}
 document.getElementById("uchip").onclick=editProfile;
 document.getElementById("orgToggle").onclick=()=>{if(ORG){ORG=false;updateChip();buildNav();if(VIEW==="real")setView("pron");toast("Saliste de organizador");return;}ensureOrg(false);};
-function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
+function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="trivia")renderTrivia();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
 
 /* ===================== INICIO ===================== */
 function dayLabel(){try{const s=new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});return s.charAt(0).toUpperCase()+s.slice(1);}catch(e){return "Hoy";}}
@@ -1375,7 +1407,7 @@ function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-
 function sign(a,b){return a>b?1:a<b?-1:0;}
 function computePoints(p){
   const P=CFG.points;
-  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Ajuste:0};
+  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Trivia:0,Bienvenida:0,Ajuste:0};
   MATCHES.forEach(m=>{const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;
     const k="J"+mdOf(m);if(ps.a===as.a&&ps.b===as.b)bd[k]+=P.exact*((p.x2&&p.x2[k]===m.id)?2:1);else if(sign(ps.a,ps.b)===sign(as.a,as.b))bd[k]+=P.outcome;});
   const pq=qualifiers(p.scores),aq=qualifiers(ACT.scores);
@@ -1400,6 +1432,8 @@ function computePoints(p){
   if(p.mvp&&ACT.mvp&&norm(p.mvp)===norm(ACT.mvp))bd.MVP+=P.mvp;
   if(p.joven&&ACT.joven&&norm(p.joven)===norm(ACT.joven))bd.Juvenil+=P.joven;
   bd.Ajuste=Number(p.adj)||0;
+  bd.Trivia=(TRIVIA_WINS[p.id]||0)*TRIVIA_PTS;
+  bd.Bienvenida=p.welcome?WELCOME_PTS:0;
   let total=0;Object.keys(bd).forEach(k=>{bd[k]=Math.round(bd[k]*10)/10;total+=bd[k];});
   return {total:Math.round(total*10)/10,bd};
 }
@@ -1429,7 +1463,7 @@ function renderDetail(){
   const groups=[
     ["Fase de grupos",[["J1","Jornada 1"],["J2","Jornada 2"],["J3","Jornada 3"],["Clasif","Clasificados"]]],
     ["Cuadro",[["Octavos","Octavos"],["Cuartos","Cuartos"],["Semis","Semis"],["Final","Final"],["Campeón","Campeón"],["ResKO","Resultados de cruces"]]],
-    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"],["Ajuste","Ajuste manual"]]]
+    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"],["Trivia","Trivia (ganador del día)"],["Bienvenida","Puntos de bienvenida"],["Ajuste","Ajuste manual"]]]
   ];
   let h=`<div class="band" data-c="slate" style="margin-top:18px"><div class="be">Detalle de puntos</div><h2>${esc(p.name)} · ${total} pts</h2></div>`;
   // estadísticas del jugador
@@ -1447,6 +1481,147 @@ function renderDetail(){
   });
   h+=`<div class="bkr tot"><span>Total</span><span>${total} pts</span></div></div>`;
   d.innerHTML=h;
+}
+
+/* ===================== TRIVIA DEL DÍA ===================== */
+const TRIVIA_PTS=2;
+const WELCOME_PTS=20;
+const TRIVIA_TIMES={mc:5,approx:8,open:10};
+const CFACTS={
+"México":{cap:"Ciudad de México",pob:129,wc:0,conf:"Concacaf"},
+"Sudáfrica":{cap:"Pretoria",pob:60,wc:0,conf:"CAF"},
+"Corea del Sur":{cap:"Seúl",pob:52,wc:0,conf:"AFC"},
+"Chequia":{cap:"Praga",pob:11,wc:0,conf:"UEFA"},
+"Canadá":{cap:"Ottawa",pob:40,wc:0,conf:"Concacaf"},
+"Suiza":{cap:"Berna",pob:9,wc:0,conf:"UEFA"},
+"Qatar":{cap:"Doha",pob:3,wc:0,conf:"AFC"},
+"Bosnia y H.":{cap:"Sarajevo",pob:3,wc:0,conf:"UEFA"},
+"Brasil":{cap:"Brasilia",pob:216,wc:5,conf:"Conmebol"},
+"Marruecos":{cap:"Rabat",pob:37,wc:0,conf:"CAF"},
+"Escocia":{cap:"Edimburgo",pob:5,wc:0,conf:"UEFA"},
+"Haití":{cap:"Puerto Príncipe",pob:12,wc:0,conf:"Concacaf"},
+"Estados Unidos":{cap:"Washington D. C.",pob:335,wc:0,conf:"Concacaf"},
+"Australia":{cap:"Canberra",pob:26,wc:0,conf:"AFC"},
+"Paraguay":{cap:"Asunción",pob:7,wc:0,conf:"Conmebol"},
+"Turquía":{cap:"Ankara",pob:85,wc:0,conf:"UEFA"},
+"Alemania":{cap:"Berlín",pob:84,wc:4,conf:"UEFA"},
+"Ecuador":{cap:"Quito",pob:18,wc:0,conf:"Conmebol"},
+"Costa de Marfil":{cap:"Yamusukro",pob:28,wc:0,conf:"CAF"},
+"Curazao":{cap:"Willemstad",pob:0.15,wc:0,conf:"Concacaf"},
+"Países Bajos":{cap:"Ámsterdam",pob:18,wc:0,conf:"UEFA"},
+"Japón":{cap:"Tokio",pob:124,wc:0,conf:"AFC"},
+"Túnez":{cap:"Túnez",pob:12,wc:0,conf:"CAF"},
+"Suecia":{cap:"Estocolmo",pob:10,wc:0,conf:"UEFA"},
+"Bélgica":{cap:"Bruselas",pob:12,wc:0,conf:"UEFA"},
+"Egipto":{cap:"El Cairo",pob:112,wc:0,conf:"CAF"},
+"Irán":{cap:"Teherán",pob:89,wc:0,conf:"AFC"},
+"Nueva Zelanda":{cap:"Wellington",pob:5,wc:0,conf:"OFC"},
+"España":{cap:"Madrid",pob:48,wc:1,conf:"UEFA"},
+"Uruguay":{cap:"Montevideo",pob:3.4,wc:2,conf:"Conmebol"},
+"Arabia Saudí":{cap:"Riad",pob:36,wc:0,conf:"AFC"},
+"Cabo Verde":{cap:"Praia",pob:0.6,wc:0,conf:"CAF"},
+"Francia":{cap:"París",pob:68,wc:2,conf:"UEFA"},
+"Senegal":{cap:"Dakar",pob:18,wc:0,conf:"CAF"},
+"Noruega":{cap:"Oslo",pob:5.5,wc:0,conf:"UEFA"},
+"Irak":{cap:"Bagdad",pob:43,wc:0,conf:"AFC"},
+"Argentina":{cap:"Buenos Aires",pob:46,wc:3,conf:"Conmebol"},
+"Austria":{cap:"Viena",pob:9,wc:0,conf:"UEFA"},
+"Argelia":{cap:"Argel",pob:45,wc:0,conf:"CAF"},
+"Jordania":{cap:"Amán",pob:11,wc:0,conf:"AFC"},
+"Portugal":{cap:"Lisboa",pob:10,wc:0,conf:"UEFA"},
+"Colombia":{cap:"Bogotá",pob:52,wc:0,conf:"Conmebol"},
+"Uzbekistán":{cap:"Taskent",pob:36,wc:0,conf:"AFC"},
+"R.D. del Congo":{cap:"Kinsasa",pob:102,wc:0,conf:"CAF"},
+"Inglaterra":{cap:"Londres",pob:56,wc:1,conf:"UEFA"},
+"Croacia":{cap:"Zagreb",pob:3.9,wc:0,conf:"UEFA"},
+"Panamá":{cap:"Ciudad de Panamá",pob:4.4,wc:0,conf:"Concacaf"},
+"Ghana":{cap:"Acra",pob:34,wc:0,conf:"CAF"}
+};
+function normTxt(s){return (""+(s==null?"":s)).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");}
+function seedRand(seed){let s=2166136261>>>0;for(let i=0;i<seed.length;i++){s^=seed.charCodeAt(i);s=Math.imul(s,16777619);}return function(){s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};}
+function shuffleArr(a,r){for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function triviaPool(date){const set=[];MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.artDate===date){[m.a,m.b].forEach(t=>{if(CFACTS[t]&&set.indexOf(t)<0)set.push(t);});}});return set;}
+function mcQ(country,kind,r){
+  if(kind==="conf"){const correct=CFACTS[country].conf;const confs=["Conmebol","UEFA","Concacaf","CAF","AFC","OFC"];const opts=[correct].concat(shuffleArr(confs.filter(c=>c!==correct),r).slice(0,3));shuffleArr(opts,r);return {type:"mc",country,q:`¿A qué confederación pertenece ${country}?`,options:opts,correct};}
+  const correct=CFACTS[country].cap;const others=shuffleArr(Object.keys(CFACTS).filter(k=>k!==country&&CFACTS[k].cap!==correct).map(k=>CFACTS[k].cap),r);const opts=[correct,others[0],others[1],others[2]];shuffleArr(opts,r);return {type:"mc",country,q:`¿Cuál es la capital de ${country}?`,options:opts,correct};
+}
+function dailyTrivia(date){
+  const pool=triviaPool(date);if(pool.length<1)return null;
+  const r=seedRand("tq"+date);const sh=shuffleArr(pool.slice(),r);
+  const c1=sh[0],c2=sh[1%sh.length],c3=sh[2%sh.length];
+  const qs=[];
+  qs.push(mcQ(c1,r()<0.5?"cap":"conf",r));
+  qs.push({type:"approx",country:c2,q:`¿Cuántos millones de habitantes tiene ${c2}?`,correct:CFACTS[c2].pob,unit:"millones"});
+  qs.push({type:"open",country:c3,q:`¿Cuál es la capital de ${c3}?`,correct:CFACTS[c3].cap});
+  return {date,qs};
+}
+function triviaScoreDay(date){
+  const t=dailyTrivia(date);if(!t)return null;
+  const ans={};PLAYERS.forEach(p=>{const a=p.trivia&&p.trivia[date];if(a&&a.done)ans[p.id]=a;});
+  const ids=Object.keys(ans);if(!ids.length)return null;
+  let best=Infinity;ids.forEach(id=>{const v=ans[id].q2;if(v!=null&&v!==""){const d=Math.abs(Number(v)-t.qs[1].correct);if(d<best)best=d;}});
+  const score={};ids.forEach(id=>{const a=ans[id];let s=0;
+    if(a.q1!=null&&a.q1===t.qs[0].correct)s++;
+    if(a.q2!=null&&a.q2!==""&&isFinite(Number(a.q2))&&Math.abs(Number(a.q2)-t.qs[1].correct)===best)s++;
+    if(a.q3!=null&&normTxt(a.q3)===normTxt(t.qs[2].correct))s++;
+    score[id]=s;});
+  const max=Math.max.apply(null,Object.values(score));
+  const winners=max>0?ids.filter(id=>score[id]===max):[];
+  return {date,t,score,winners,max};
+}
+function computeTriviaWins(){TRIVIA_WINS={};const days={};PLAYERS.forEach(p=>{if(p.trivia)Object.keys(p.trivia).forEach(d=>{days[d]=1;});});const today=artToday();Object.keys(days).forEach(d=>{if(d>=today)return;const r=triviaScoreDay(d);if(r)r.winners.forEach(id=>{TRIVIA_WINS[id]=(TRIVIA_WINS[id]||0)+1;});});}
+function triviaRankBlock(){
+  const rows=PLAYERS.map(p=>({p,w:TRIVIA_WINS[p.id]||0})).filter(r=>r.w>0).sort((a,b)=>b.w-a.w);
+  if(!rows.length)return `<div class="block"><h3>Ranking de trivia</h3><p class="sub">Todavía nadie ganó un día. El que gana suma ${TRIVIA_PTS} pts en la tabla del prode.</p></div>`;
+  let h=`<div class="block"><h3>Ranking de trivia</h3>`;rows.forEach((r,i)=>{h+=`<div class="bkr"><span>${i+1}. ${esc(r.p.name)}${r.p.id===ME?" (vos)":""}</span><span class="v">${r.w} día${r.w>1?"s":""} · ${r.w*TRIVIA_PTS} pts</span></div>`;});h+=`</div>`;return h;
+}
+function triviaMyBlock(date,p){
+  const t=dailyTrivia(date);const a=p.trivia[date];
+  const closed=date<artToday();const r=closed?triviaScoreDay(date):null;
+  let h=`<div class="block"><h3>Tu trivia ${closed?"· resultado":"· enviada ✓"}</h3>`;
+  if(!closed)h+=`<p class="sub">Quedó registrada. A las 23:59 se cierra y se reparte el punto al mejor del día.</p>`;
+  t.qs.forEach((q,i)=>{const mine=a["q"+(i+1)];const ok=closed&&((q.type==="open")?normTxt(mine)===normTxt(q.correct):(q.type==="mc")?mine===q.correct:false);
+    h+=`<div class="trow"><div class="trq">${i+1}. ${q.q}</div><div class="tra">Vos: <b>${mine==null||mine===""?"—":esc(""+mine)}</b>${closed?` · ${q.type==="approx"?"Real":"Correcta"}: <b>${esc(""+q.correct)}</b>${q.type!=="approx"?(ok?" ✓":" ✗"):""}`:""}</div></div>`;});
+  if(closed&&r){const iWon=r.winners.indexOf(ME)>=0;const names=r.winners.map(id=>{const pp=PLAYERS.find(x=>x.id===id);return pp?esc(pp.name):"";}).filter(Boolean).join(", ");h+=`<div class="bkr tot"><span>${iWon?"¡Ganaste el día! 🎉":"Mejor del día"}</span><span>${names||"sin ganador"}</span></div>`;}
+  h+=`</div>`;return h;
+}
+function renderTrivia(){
+  const v=document.getElementById("v-trivia");const p=me();const today=artToday();const t=dailyTrivia(today);
+  let h=`<div class="band" data-c="magenta"><div class="be">03 · Minijuego</div><h2>Trivia del día</h2><p>3 preguntas sobre los países que juegan hoy. Pocos segundos por pregunta: contestá de memoria, sin Google. El mejor del día suma ${TRIVIA_PTS} pts en la tabla.</p><div class="bignum">?</div></div>`;
+  if(!p){h+=`<div class="block"><p class="sub">Entrá con tu jugador para jugar la trivia.</p></div>`;v.innerHTML=h;return;}
+  if(!t){h+=`<div class="block"><h3>Hoy no hay trivia</h3><p class="sub">No hay partidos con países disponibles hoy. Volvé un día de partidos.</p></div>`+triviaRankBlock();v.innerHTML=h;return;}
+  const done=p.trivia&&p.trivia[today]&&p.trivia[today].done;
+  if(done){h+=triviaMyBlock(today,p);}
+  else{h+=`<div class="block" style="text-align:center"><div style="font-size:40px;margin-bottom:4px">⚡</div><p class="sub">3 preguntas contrarreloj. Una sola chance por día.<br>Cierra a las 23:59.</p><button class="btn" id="triviaStart" style="margin-top:12px">▶ Jugar ahora</button></div>`;}
+  h+=triviaRankBlock();
+  v.innerHTML=h;
+  const sb=document.getElementById("triviaStart");if(sb)sb.onclick=function(){startTrivia(today,t,p);};
+}
+function startTrivia(date,t,p){
+  let i=0;const answers={};
+  let ovl=document.getElementById("triviaOvl");if(!ovl){ovl=document.createElement("div");ovl.id="triviaOvl";ovl.className="tovl";document.body.appendChild(ovl);}
+  ovl.style.display="flex";
+  function showQ(){
+    if(i>=t.qs.length)return finish();
+    const q=t.qs[i];const secs=TRIVIA_TIMES[q.type]||6;
+    const kindLbl=q.type==="mc"?"Opción múltiple":q.type==="approx"?"Aproximación · gana el más cercano":"Sin opciones";
+    let inner=`<div class="tcard"><div class="tprog"><span>Pregunta ${i+1}/3 · ${esc(q.country)}</span><span class="tkind">${kindLbl}</span></div><div class="ttimer"><div class="tbar" id="tbar"></div></div><div class="tq">${q.q}</div>`;
+    if(q.type==="mc"){inner+=`<div class="topts">`+q.options.map((o,oi)=>`<button class="topt" data-o="${oi}">${esc(o)}</button>`).join("")+`</div>`;}
+    else{inner+=`<div class="tinp"><input id="tans" type="${q.type==="approx"?"number":"text"}" ${q.type==="approx"?'inputmode="decimal"':'autocomplete="off"'} placeholder="${q.type==="approx"?"número":"escribí…"}">${q.unit?`<span class="tunit">${q.unit}</span>`:""}</div><button class="btn tok" id="tok">Responder ▶</button>`;}
+    inner+=`</div>`;ovl.innerHTML=inner;
+    const bar=document.getElementById("tbar");bar.style.width="100%";requestAnimationFrame(function(){bar.style.transition="width "+secs+"s linear";bar.style.width="0%";});
+    let used=false;const to=setTimeout(function(){record(null);},secs*1000);
+    function record(val){if(used)return;used=true;clearTimeout(to);answers["q"+(i+1)]=val;i++;showQ();}
+    if(q.type==="mc"){Array.prototype.forEach.call(ovl.querySelectorAll(".topt"),function(b){b.onclick=function(){record(q.options[+b.dataset.o]);};});}
+    else{const ok=document.getElementById("tok"),inp=document.getElementById("tans");setTimeout(function(){try{inp.focus();}catch(e){}},60);ok.onclick=function(){record(inp.value===""?null:inp.value);};inp.onkeydown=function(e){if(e.key==="Enter")record(inp.value===""?null:inp.value);};}
+  }
+  async function finish(){
+    ovl.style.display="none";ovl.innerHTML="";
+    p.trivia=p.trivia||{};p.trivia[date]={done:true,q1:answers.q1==null?null:answers.q1,q2:answers.q2==null?null:answers.q2,q3:answers.q3==null?null:answers.q3,ts:Date.now()};
+    try{await savePlayer(p);}catch(e){}
+    if(VIEW==="trivia")renderTrivia();toast("¡Listo! Quedó tu trivia de hoy");
+  }
+  showQ();
 }
 
 /* ===================== REGLAMENTO ===================== */
