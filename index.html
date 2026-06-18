@@ -304,6 +304,23 @@ input,select{font-family:var(--body)}
 .hm-gt{color:var(--ink2);font-size:11px;font-weight:700;width:40px;flex-shrink:0}
 .hm-refresh{border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:6px;font-size:12px;padding:0 6px;cursor:pointer;margin-left:4px;line-height:1.6}
 .hm-refresh:hover{border-color:var(--ink2)}
+.hm-pf{padding:2px 0 8px;border-bottom:1px solid var(--line2);margin-bottom:4px}
+.hm-pfn{font-family:var(--disp);font-weight:800;font-size:16px;line-height:1.1}
+.hm-pfr{font-size:11px;color:var(--mut);margin-top:2px}
+.pstats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.pstat{background:var(--ink);color:#fff;border-radius:11px;padding:12px 14px}
+.pstat .v{font-family:var(--disp);font-weight:800;font-size:24px;line-height:1}
+.pstat .l{font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+.pstat3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;text-align:center}
+.pstat3 div.c{border:1px solid var(--line);border-radius:10px;padding:9px 4px}
+.pstat3 .v{font-family:var(--disp);font-weight:800;font-size:18px}
+.pstat3 .l{font-size:9px;color:var(--mut);text-transform:uppercase}
+.pstatrow{display:flex;justify-content:space-between;padding:8px 2px;font-size:13px;border-top:1px solid var(--line2)}
+.pstatrow b{font-family:var(--disp);font-weight:800}
+.pacc{display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:11px;padding:11px 14px;margin-bottom:10px}
+.pacc .pct{font-family:var(--disp);font-weight:800;font-size:24px;color:var(--green)}
+.pbar{height:6px;background:var(--line);border-radius:3px;margin-top:5px;overflow:hidden}
+.pbar>div{height:100%;background:var(--green)}
 .hm-gm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hm-gm .vs{color:var(--mut);font-size:11px}
 .hm-gm .flag{width:16px;height:11px;vertical-align:-1px}
@@ -631,7 +648,6 @@ async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSync
     try{queueReminderPopup();}catch(e){}
     if(changed)try{evalRankPopups();}catch(e){}
     try{queueMvpPopup();}catch(e){}
-    if(lsGet("prode_assists")!==today){fetchAssists().then(function(ok){if(ok){lsSet("prode_assists",today);if(VIEW==="home")renderHome();}});}
     const fj=JSON.stringify(FIXMETA);if(fj!==FIXMETA_JSON){FIXMETA_JSON=fj;await store.set("fixmeta",fj);changed=true;}
     const gj=JSON.stringify(GOALS);if(gj!==GOALS_JSON){GOALS_JSON=gj;await store.set("goals",gj);}
     lastSync=Date.now();return changed;
@@ -770,6 +786,30 @@ function showNextPopup(){
 function enqueuePopup(cat,meta,share){if(SONGS[cat])popupQueue.push({cat:cat,song:pickSong(SONGS[cat]),meta:meta,share:share||{}});}
 
 function wrapLines(x,text,maxW){const w=(text||"").split(" ");const out=[];let cur="";w.forEach(function(word){const t=cur?cur+" "+word:word;if(x.measureText(t).width>maxW&&cur){out.push(cur);cur=word;}else cur=t;});if(cur)out.push(cur);return out;}
+async function makeStatsBlob(p,st){
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+  const W=1080,H=1920,P=96;const c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d");
+  x.fillStyle="#141414";x.fillRect(0,0,W,H);x.textBaseline="alphabetic";
+  x.fillStyle="#C8841C";x.save();x.font="800 32px Manrope, sans-serif";x.translate(P,150);if(x.letterSpacing!==undefined)x.letterSpacing="6px";x.fillText("PRODE \u00b7 26",0,0);x.restore();
+  x.fillStyle="#fff";x.font="800 88px Manrope, sans-serif";x.fillText(p.name,P,300,W-P*2);
+  x.fillStyle="rgba(255,255,255,.5)";x.font="36px Manrope, sans-serif";x.fillText("Mis estad\u00edsticas",P,352);
+  x.fillStyle="#fff";x.font="800 120px Manrope, sans-serif";x.fillText(st.rank+"\u00b0",P,540);x.fillText(""+st.total,P+380,540);
+  x.fillStyle="rgba(255,255,255,.5)";x.font="32px Manrope, sans-serif";x.fillText("POSICI\u00d3N",P,592);x.fillText("PUNTOS",P+380,592);
+  x.fillStyle="#5BE0A6";x.font="800 190px Manrope, sans-serif";x.fillText(st.pct+"%",P,830);
+  x.fillStyle="rgba(255,255,255,.5)";x.font="38px Manrope, sans-serif";x.fillText("de acierto \u00b7 "+st.hit+"/"+st.played,P,884);
+  let y=1040;const rows=[["Exactos",""+st.exact],["Acert\u00f3 ganador",""+st.outcome],["Mejor d\u00eda",st.bestDay+" pts"],["Medallas",st.medals?"\ud83c\udfc5 \u00d7"+st.medals:"\u2014"]];
+  rows.forEach(function(r){x.fillStyle="rgba(255,255,255,.15)";x.fillRect(P,y,W-P*2,2);y+=66;x.fillStyle="rgba(255,255,255,.6)";x.font="44px Manrope, sans-serif";x.textAlign="left";x.fillText(r[0],P,y);x.fillStyle="#fff";x.font="800 50px Manrope, sans-serif";x.textAlign="right";x.fillText(r[1],W-P,y);x.textAlign="left";y+=42;});
+  x.fillStyle="rgba(255,255,255,.4)";x.font="32px Manrope, sans-serif";x.fillText("Mundial 2026 \u00b7 prode",P,1812);
+  return await new Promise(function(res){c.toBlob(res,"image/png",0.92);});
+}
+async function shareStats(){
+  const p=me();if(!p)return;const st=playerStats(p);
+  try{const blob=await makeStatsBlob(p,st);if(!blob)throw new Error("noblob");
+    const file=new File([blob],"prode-stats.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"Mis stats \u00b7 Prode 26"});}
+    else{const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="prode-stats.png";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},5000);toast("Imagen descargada \u00b7 subila a tu historia");}
+  }catch(e){if(!e||e.name!=="AbortError")toast("No se pudo compartir");}
+}
 async function makeStoryBlob(it){
   try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
   const W=1080,H=1920,P=96,maxW=W-P*2;
@@ -891,6 +931,14 @@ function dayBuckets(){const b={};MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&
 function lastClosedDay(){const b=dayBuckets();let last="";Object.keys(b).sort().forEach(d=>{if(b[d].length&&b[d].every(f=>isFinal(f.status)))last=d;});return last;}
 function dayMVP(day){if(!day)return null;const rows=PLAYERS.map(p=>({p,pts:dayScore(p,day)})).filter(r=>r.pts>0).sort((a,b)=>b.pts-a.pts||a.p.name.localeCompare(b.p.name));return rows.length?{day,rows}:null;}
 function computeMedals(){MEDALS={};const b=dayBuckets();Object.keys(b).forEach(d=>{if(!b[d].length||!b[d].every(f=>isFinal(f.status)))return;const mv=dayMVP(d);if(mv&&mv.rows.length)MEDALS[mv.rows[0].p.id]=(MEDALS[mv.rows[0].p.id]||0)+1;});}
+function playerRank(id){const rows=PLAYERS.map(p=>({id:p.id,t:computePoints(p).total})).sort((a,b)=>b.t-a.t);return rows.findIndex(r=>r.id===id)+1;}
+function playerStats(p){
+  let exact=0,outcome=0,miss=0,played=0;
+  MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(!f||!isFinal(f.status))return;const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;played++;if(ps.a===as.a&&ps.b===as.b)exact++;else if(sign(ps.a,ps.b)===sign(as.a,as.b))outcome++;else miss++;});
+  let bestDay=0;const b=dayBuckets();Object.keys(b).forEach(d=>{if(b[d].length&&b[d].every(f=>isFinal(f.status))){const s=dayScore(p,d);if(s>bestDay)bestDay=s;}});
+  const hit=exact+outcome,pct=played?Math.round(hit/played*100):0;
+  return {exact,outcome,miss,played,hit,pct,bestDay,medals:MEDALS[p.id]||0,total:computePoints(p).total,rank:playerRank(p.id)};
+}
 function queueMvpPopup(){
   if(!ME||!lsGet("prode_init_"+ME))return;
   const day=lastClosedDay();if(!day)return;
@@ -1086,11 +1134,19 @@ function renderHome(){
   }else{
     h+=`<div class="hm-card"><div class="hm-sec">Partidos</div><div class="hm-empty">No hay partidos hoy ni mañana, o todavía estoy sincronizando con el servidor.</div></div>`;
   }
-  // estadísticas
-  const sc=topScorers(4),as=ASSISTS.slice(0,4);
+  // estadísticas: goleadores + tu resumen
+  const sc=topScorers(4),meP=me(),st=meP?playerStats(meP):null;
   h+=`<div class="hm-stats">`;
   h+=`<div class="hm-stat"><div class="hm-sec">Goleadores</div>`+(sc.length?sc.map(s=>`<div class="hm-srow"><span class="nm">${flag(s.team)} ${esc(s.p)}</span><b>${s.goals}</b></div>`).join(""):`<div class="hm-empty">Sin goles aún</div>`)+`</div>`;
-  h+=`<div class="hm-stat"><div class="hm-sec">Asistencias${ORG?` <button class="hm-refresh" onclick="refreshAssists()" title="Actualizar">↻</button>`:""}</div>`+(as.length?as.map(x=>`<div class="hm-srow"><span class="nm">${flag(x.team)} ${esc(x.p)}</span><b style="color:var(--blue)">${x.a}</b></div>`).join(""):`<div class="hm-empty">Sin datos aún</div>`)+`</div>`;
+  if(st){
+    h+=`<div class="hm-stat"><div class="hm-sec">Tu resumen <button class="hm-refresh" onclick="shareStats()" title="Compartir">↗</button></div>
+      <div class="hm-pf"><div class="hm-pfn">${esc(meP.name)}</div><div class="hm-pfr">${st.rank}° · ${st.total} pts${st.medals?` · 🏅×${st.medals}`:""}</div></div>
+      <div class="hm-srow"><span class="nm">Acierto</span><b style="color:var(--green)">${st.pct}%</b></div>
+      <div class="hm-srow"><span class="nm">Exactos</span><b>${st.exact}</b></div>
+      <div class="hm-srow"><span class="nm">Mejor día</span><b>${st.bestDay}</b></div></div>`;
+  }else{
+    h+=`<div class="hm-stat"><div class="hm-sec">Tu resumen</div><div class="hm-empty">Cargá tus pronósticos para ver tus stats.</div></div>`;
+  }
   h+=`</div>`;
   // MVP del día (último día de competición cerrado)
   const mvDay=lastClosedDay(),mv=dayMVP(mvDay);
@@ -1319,7 +1375,7 @@ function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-
 function sign(a,b){return a>b?1:a<b?-1:0;}
 function computePoints(p){
   const P=CFG.points;
-  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Medallas:0,Ajuste:0};
+  const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Ajuste:0};
   MATCHES.forEach(m=>{const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;
     const k="J"+mdOf(m);if(ps.a===as.a&&ps.b===as.b)bd[k]+=P.exact*((p.x2&&p.x2[k]===m.id)?2:1);else if(sign(ps.a,ps.b)===sign(as.a,as.b))bd[k]+=P.outcome;});
   const pq=qualifiers(p.scores),aq=qualifiers(ACT.scores);
@@ -1344,7 +1400,6 @@ function computePoints(p){
   if(p.mvp&&ACT.mvp&&norm(p.mvp)===norm(ACT.mvp))bd.MVP+=P.mvp;
   if(p.joven&&ACT.joven&&norm(p.joven)===norm(ACT.joven))bd.Juvenil+=P.joven;
   bd.Ajuste=Number(p.adj)||0;
-  bd.Medallas=(MEDALS[p.id]||0)*MEDAL_PTS;
   let total=0;Object.keys(bd).forEach(k=>{bd[k]=Math.round(bd[k]*10)/10;total+=bd[k];});
   return {total:Math.round(total*10)/10,bd};
 }
@@ -1374,9 +1429,17 @@ function renderDetail(){
   const groups=[
     ["Fase de grupos",[["J1","Jornada 1"],["J2","Jornada 2"],["J3","Jornada 3"],["Clasif","Clasificados"]]],
     ["Cuadro",[["Octavos","Octavos"],["Cuartos","Cuartos"],["Semis","Semis"],["Final","Final"],["Campeón","Campeón"],["ResKO","Resultados de cruces"]]],
-    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"],["Medallas","Medallas 🏅 (MVP del día)"],["Ajuste","Ajuste manual"]]]
+    ["Especiales",[["Favoritos","Favoritos"],["Revelación","Revelación"],["Goleador","Goleador"],["MVP","MVP"],["Juvenil","Juvenil"],["Ajuste","Ajuste manual"]]]
   ];
-  let h=`<div class="band" data-c="slate" style="margin-top:18px"><div class="be">Detalle de puntos</div><h2>${esc(p.name)} · ${total} pts</h2></div><div class="block">`;
+  let h=`<div class="band" data-c="slate" style="margin-top:18px"><div class="be">Detalle de puntos</div><h2>${esc(p.name)} · ${total} pts</h2></div>`;
+  // estadísticas del jugador
+  const st=playerStats(p);
+  h+=`<div class="block"><div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Estadísticas${st.medals?` · 🏅×${st.medals}`:""}</h3>${p.id===ME?`<button class="btn sm" onclick="shareStats()">↗ Compartir</button>`:""}</div>`;
+  h+=`<div class="pstats"><div class="pstat"><div class="v">${st.rank}°</div><div class="l">Posición</div></div><div class="pstat"><div class="v">${st.total}</div><div class="l">Puntos</div></div></div>`;
+  h+=`<div class="pacc"><div class="pct">${st.pct}%</div><div style="flex:1"><div style="font-size:11px;color:var(--ink2)">Acierto · ${st.hit} de ${st.played} jugados</div><div class="pbar"><div style="width:${st.pct}%"></div></div></div></div>`;
+  h+=`<div class="pstat3"><div class="c"><div class="v" style="color:var(--green)">${st.exact}</div><div class="l">Exactos</div></div><div class="c"><div class="v" style="color:var(--blue)">${st.outcome}</div><div class="l">Ganador</div></div><div class="c"><div class="v" style="color:var(--mut)">${st.miss}</div><div class="l">Fallados</div></div></div>`;
+  h+=`<div class="pstatrow"><span>Tu mejor día</span><b>${st.bestDay} pts</b></div><div class="pstatrow"><span>Medallas (MVP del día)</span><b>${st.medals?"🏅 ×"+st.medals:"—"}</b></div></div>`;
+  h+=`<div class="block">`;
   groups.forEach(([title,items])=>{
     const sub=Math.round(items.reduce((a,it)=>a+bd[it[0]],0)*10)/10;
     h+=`<div class="bkr"><span style="font-weight:700">${title}</span><span class="v">${sub}</span></div>`;
