@@ -1449,7 +1449,7 @@ function renderTabla(){
   const lead=rows[0];
   h+=`<div class="lead-hero"><div><div class="e">Puntero</div><div class="n">${lead.sc.total>0?esc(lead.p.name):"—"}</div></div><div class="lh-r">${lead.sc.total}<small>PUNTOS</small></div></div>`;
   h+=`<div style="overflow-x:auto"><table class="ltbl"><tr><th></th><th style="text-align:left">Jugador</th><th>J1</th><th>J2</th><th>J3</th><th>Cuadro</th><th>Espec.</th><th>Total</th></tr>`;
-  h+=rows.map((r,i)=>{const b=r.sc.bd;const cuadro=Math.round((b.Clasif+b.Octavos+b.Cuartos+b.Semis+b.Final+b.Campeón)*10)/10;const esp=Math.round((b.Favoritos+b.Revelación+b.Goleador+b.MVP+b.Juvenil)*10)/10;
+  h+=rows.map((r,i)=>{const b=r.sc.bd;const cuadro=Math.round((b.Clasif+b.Octavos+b.Cuartos+b.Semis+b.Final+b.Campeón+b.ResKO)*10)/10;const esp=Math.round((b.Favoritos+b.Revelación+b.Goleador+b.MVP+b.Juvenil+b.Trivia+b.Bienvenida+b.Ajuste)*10)/10;
     return `<tr class="clk ${r.p.id===ME?"me":""}" data-d="${r.p.id}"><td class="rk ${i===0?"g1":""}">${i+1}</td><td class="nm">${esc(r.p.name)}${MEDALS[r.p.id]?` <span style="font-size:11px">🏅${MEDALS[r.p.id]>1?"×"+MEDALS[r.p.id]:""}</span>`:""}</td><td>${b.J1}</td><td>${b.J2}</td><td>${b.J3}</td><td>${cuadro}</td><td>${esp}</td><td class="tot">${r.sc.total}</td></tr>`;}).join("");
   h+=`</table></div><div id="detailBody"></div>`;v.innerHTML=h;
   document.getElementById("refreshBtn").onclick=async()=>{await loadPlayers();await syncLive();renderTabla();toast("Actualizado");};
