@@ -580,7 +580,7 @@ const TOUR_START="2026-06-11",TOUR_END="2026-07-19";
 function clampDate(s){return s<TOUR_START?TOUR_START:(s>TOUR_END?TOUR_END:s);}
 function dateRange(a,b){const out=[],d=new Date(a+"T00:00:00Z"),end=new Date(b+"T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
 function offsetDay(today,n){const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
-let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},MEDALS={},TRIVIA_WINS={};
+let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},MEDALS={},TRIVIA_WINS={},TRIVIA_FROZEN={};
 const MEDAL_PTS=3; // puntos por cada medalla (MVP del día)
 function pairKey(a,b){return [a,b].sort().join("~");}
 function artParts(iso){
@@ -677,6 +677,7 @@ async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSync
     TOMORROWGAMES.sort((x,y)=>(x.time||"99").localeCompare(y.time||"99"));
     if(needFull)lsSet("prode_fullscan",today);
     recomputeMatchdays();
+    try{await freezeDayTrivia(artToday());}catch(e){}
     try{computeMedals();}catch(e){}
     try{computeTriviaWins();}catch(e){}
     let changed=applyLiveToAct();if(changed)await saveAct();
@@ -1001,6 +1002,7 @@ async function loadAll(){
   const fx=await store.get("fixmeta");if(fx){try{FIXMETA=JSON.parse(fx)||{};FIXMETA_JSON=fx;}catch(e){FIXMETA={};}}
   const gg=await store.get("goals");if(gg){try{GOALS=JSON.parse(gg)||{};GOALS_JSON=gg;}catch(e){GOALS={};}}
   const aa=await store.get("assists");if(aa){try{ASSISTS=JSON.parse(aa)||[];ASSISTS_JSON=aa;}catch(e){ASSISTS=[];}}
+  try{const tks=await store.list("tq:");for(const k of tks){const v=await store.get(k);if(v){try{TRIVIA_FROZEN[k.slice(3)]=JSON.parse(v);}catch(e){}}}}catch(e){}
   await loadPlayers();
   const m=await store.getMe();ME=(m&&m.id)?m.id:null;
 }
@@ -1438,9 +1440,9 @@ function renderAudit(){
   let h=`<div class="band" data-c="slate"><div class="be">Transparencia</div><h2>Auditoría de puntos</h2><p>De dónde sale el puntaje de cada uno, partido por partido. Se recalcula solo, sobre los pronósticos cargados y los resultados reales.</p></div>`;
   h+=`<div class="block"><h3>Cómo se cuenta cada punto</h3><div class="arules"><span>Exacto = ${P.exact}</span><span>Solo ganador = ${P.outcome}</span><span>Comodín ×2 duplica el exacto</span><span>Trivia = ${TRIVIA_PTS} al ganador del día</span><span>Bienvenida = ${WELCOME_PTS}</span><span>Ajuste = lo carga el organizador</span></div></div>`;
   const wel=PLAYERS.filter(p=>p.welcome),adjs=PLAYERS.filter(p=>(Number(p.adj)||0)!==0);
-  if(wel.length||adjs.length){h+=`<div class="block"><h3>Puntos de arranque</h3><p class="sub">Para que quien se sumó con el prode ya empezado pueda competir de igual a igual.</p>`;
+  if(wel.length||adjs.length){h+=`<div class="block"><h3>Bienvenida y ajustes</h3><p class="sub">La bienvenida y los ajustes de nivelación dan colchón a quien se sumó tarde. El organizador también usa los ajustes para correcciones puntuales.</p>`;
     wel.forEach(p=>{h+=`<div class="bkr"><span>${esc(p.name)} · bienvenida</span><span class="v">+${WELCOME_PTS}</span></div>`;});
-    adjs.forEach(p=>{const a=Number(p.adj)||0;h+=`<div class="bkr"><span>${esc(p.name)} · ajuste de nivelación</span><span class="v">${a>0?"+":""}${a}</span></div>`;});
+    adjs.forEach(p=>{const a=Number(p.adj)||0;h+=`<div class="bkr"><span>${esc(p.name)} · ajuste del organizador</span><span class="v">${a>0?"+":""}${a}</span></div>`;});
     h+=`</div>`;}
   h+=`<div class="block"><h3>Detalle por jugador</h3><p class="sub">Tocá un nombre para ver todos sus puntos.</p>`;
   rows.forEach((r,i)=>{const det=playerMatchDetail(r.p),scored=det.filter(d=>d.pts>0),b=r.sc.bd;
@@ -1605,8 +1607,17 @@ function dailyTrivia(date){
   qs.push({type:"open",country:c3,q:`¿Cuál es la capital de ${c3}?`,correct:CFACTS[c3].cap});
   return {date,qs};
 }
-function triviaScoreDay(date){
+async function freezeDayTrivia(date){
+  if(!date)return null;
+  if(TRIVIA_FROZEN[date])return TRIVIA_FROZEN[date];
   const t=dailyTrivia(date);if(!t)return null;
+  TRIVIA_FROZEN[date]=t;
+  try{await store.set("tq:"+date,JSON.stringify(t));}catch(e){}
+  return t;
+}
+function getDayTrivia(date){return TRIVIA_FROZEN[date]||null;}
+function triviaScoreDay(date){
+  const t=TRIVIA_FROZEN[date];if(!t)return null;
   const ans={};PLAYERS.forEach(p=>{const a=p.trivia&&p.trivia[date];if(a&&a.done)ans[p.id]=a;});
   const ids=Object.keys(ans);if(!ids.length)return null;
   const dist={};ids.forEach(id=>{const v=ans[id].q2;dist[id]=(v!=null&&v!==""&&isFinite(Number(v)))?Math.abs(Number(v)-t.qs[1].correct):Infinity;});
@@ -1632,7 +1643,7 @@ function triviaRankBlock(){
   let h=`<div class="block"><h3>Ranking de trivia</h3>`;rows.forEach((r,i)=>{h+=`<div class="bkr"><span>${i+1}. ${esc(r.p.name)}${r.p.id===ME?" (vos)":""}</span><span class="v">${r.w} día${r.w>1?"s":""} · ${r.w*TRIVIA_PTS} pts</span></div>`;});h+=`</div>`;return h;
 }
 function triviaMyBlock(date,p){
-  const t=dailyTrivia(date);const a=p.trivia[date];
+  const t=getDayTrivia(date)||dailyTrivia(date);const a=p.trivia[date];
   const closed=date<artToday();const r=closed?triviaScoreDay(date):null;
   let h=`<div class="block"><h3>Tu trivia ${closed?"· resultado":"· enviada ✓"}</h3>`;
   if(!closed)h+=`<p class="sub">Quedó registrada. A las 23:59 se cierra y se reparte el punto al mejor del día.</p>`;
@@ -1642,7 +1653,9 @@ function triviaMyBlock(date,p){
   h+=`</div>`;return h;
 }
 function renderTrivia(){
-  const v=document.getElementById("v-trivia");const p=me();const today=artToday();const t=dailyTrivia(today);
+  const v=document.getElementById("v-trivia");const p=me();const today=artToday();
+  let t=getDayTrivia(today);
+  if(!t){const gen=dailyTrivia(today);if(gen)freezeDayTrivia(today).then(function(){if(VIEW==="trivia")renderTrivia();});t=gen;}
   let h=`<div class="band" data-c="magenta"><div class="be">03 · Minijuego</div><h2>Trivia del día</h2><p>3 preguntas sobre los países que juegan hoy. Pocos segundos por pregunta: contestá de memoria, sin Google. El mejor del día suma ${TRIVIA_PTS} pts en la tabla.</p><div class="bignum">?</div></div>`;
   if(!p){h+=`<div class="block"><p class="sub">Entrá con tu jugador para jugar la trivia.</p></div>`;v.innerHTML=h;return;}
   if(!t){h+=`<div class="block"><h3>Hoy no hay trivia</h3><p class="sub">No hay partidos con países disponibles hoy. Volvé un día de partidos.</p></div>`+triviaRankBlock();v.innerHTML=h;return;}
