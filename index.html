@@ -1559,15 +1559,21 @@ function triviaScoreDay(date){
   const t=dailyTrivia(date);if(!t)return null;
   const ans={};PLAYERS.forEach(p=>{const a=p.trivia&&p.trivia[date];if(a&&a.done)ans[p.id]=a;});
   const ids=Object.keys(ans);if(!ids.length)return null;
-  let best=Infinity;ids.forEach(id=>{const v=ans[id].q2;if(v!=null&&v!==""){const d=Math.abs(Number(v)-t.qs[1].correct);if(d<best)best=d;}});
+  const dist={};ids.forEach(id=>{const v=ans[id].q2;dist[id]=(v!=null&&v!==""&&isFinite(Number(v)))?Math.abs(Number(v)-t.qs[1].correct):Infinity;});
+  let best=Infinity;ids.forEach(id=>{if(dist[id]<best)best=dist[id];});
   const score={};ids.forEach(id=>{const a=ans[id];let s=0;
     if(a.q1!=null&&a.q1===t.qs[0].correct)s++;
-    if(a.q2!=null&&a.q2!==""&&isFinite(Number(a.q2))&&Math.abs(Number(a.q2)-t.qs[1].correct)===best)s++;
+    if(dist[id]===best&&best!==Infinity)s++;
     if(a.q3!=null&&normTxt(a.q3)===normTxt(t.qs[2].correct))s++;
     score[id]=s;});
   const max=Math.max.apply(null,Object.values(score));
-  const winners=max>0?ids.filter(id=>score[id]===max):[];
-  return {date,t,score,winners,max};
+  let cand=max>0?ids.filter(id=>score[id]===max):[];
+  // desempate: 1) más cerca en la de aproximación, 2) quien respondió primero
+  if(cand.length>1){
+    cand.sort((a,b)=>{if(dist[a]!==dist[b])return dist[a]-dist[b];return (ans[a].ts||Infinity)-(ans[b].ts||Infinity);});
+    cand=[cand[0]];
+  }
+  return {date,t,score,winners:cand,max};
 }
 function computeTriviaWins(){TRIVIA_WINS={};const days={};PLAYERS.forEach(p=>{if(p.trivia)Object.keys(p.trivia).forEach(d=>{days[d]=1;});});const today=artToday();Object.keys(days).forEach(d=>{if(d>=today)return;const r=triviaScoreDay(d);if(r)r.winners.forEach(id=>{TRIVIA_WINS[id]=(TRIVIA_WINS[id]||0)+1;});});}
 function triviaRankBlock(){
