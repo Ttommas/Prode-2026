@@ -323,6 +323,21 @@ input,select{font-family:var(--body)}
 .trow:last-child{border-bottom:none}
 .trq{font-size:13px;font-weight:600}
 .tra{font-size:13px;color:var(--ink2);margin-top:3px}
+.arules span{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:4px 11px;margin:3px 4px 0 0;font-size:12px;color:var(--ink2)}
+.adet{border:1px solid var(--line);border-radius:11px;margin-bottom:8px;overflow:hidden;background:var(--surface)}
+.adet summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;font-weight:700;list-style:none}
+.adet summary::-webkit-details-marker{display:none}
+.adet summary::after{content:"▾";color:var(--mut);font-size:12px}
+.adet[open] summary::after{content:"▴"}
+.asum-t{font-family:var(--disp);font-weight:800;color:var(--green);margin-left:auto}
+.abrk{font-size:11.5px;color:var(--mut);padding:0 14px 10px}
+.atab{width:100%;border-collapse:collapse;padding:0 14px 12px;font-size:12.5px}
+.atab tr{border-top:1px solid var(--line2)}
+.atab td{padding:6px 14px}
+.amd{color:var(--mut);width:32px}
+.apr{color:var(--mut);text-align:right}
+.apx{text-align:right;font-family:var(--disp);font-weight:800;width:42px}
+.apx.e{color:var(--green)}.apx.w{color:var(--blue)}
 .hm-pfn{font-family:var(--disp);font-weight:800;font-size:16px;line-height:1.1}
 .hm-pfr{font-size:11px;color:var(--mut);margin-top:2px}
 .pstats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
@@ -436,6 +451,7 @@ input,select{font-family:var(--body)}
     <section class="view" id="v-home"></section>
     <section class="view" id="v-pron"></section>
     <section class="view" id="v-tabla"></section>
+    <section class="view" id="v-audit"></section>
     <section class="view" id="v-trivia"></section>
     <section class="view" id="v-reglas"></section>
     <section class="view" id="v-real"></section>
@@ -1118,7 +1134,7 @@ async function editProfile(){
 async function refreshAssists(){lsSet("prode_assists","");toast("Actualizando asistencias…");const ok=await fetchAssists();if(VIEW==="home")renderHome();toast(ok?"Asistencias actualizadas":"No se pudieron actualizar ahora");}
 document.getElementById("uchip").onclick=editProfile;
 document.getElementById("orgToggle").onclick=()=>{if(ORG){ORG=false;updateChip();buildNav();if(VIEW==="real")setView("pron");toast("Saliste de organizador");return;}ensureOrg(false);};
-function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="trivia")renderTrivia();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
+function render(){if(VIEW==="home")renderHome();else if(VIEW==="pron")renderPron();else if(VIEW==="tabla")renderTabla();else if(VIEW==="trivia")renderTrivia();else if(VIEW==="audit")renderAudit();else if(VIEW==="reglas")renderReglas();else if(VIEW==="real")renderReal();}
 
 /* ===================== INICIO ===================== */
 function dayLabel(){try{const s=new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});return s.charAt(0).toUpperCase()+s.slice(1);}catch(e){return "Hoy";}}
@@ -1405,6 +1421,39 @@ function wireReal(){
 /* ===================== SCORING ===================== */
 function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();}
 function sign(a,b){return a>b?1:a<b?-1:0;}
+function playerMatchDetail(p){
+  const P=CFG.points,det=[];
+  MATCHES.forEach(m=>{if(!/^[A-L][0-5]$/.test(m.id))return;const f=FIXMETA[m.id];if(!f||!isFinal(f.status))return;const as=ACT.scores[m.id];if(!as||as.a==null||as.b==null)return;
+    const ps=p.scores[m.id],md=mdOf(m);let pts=0,res="falló";
+    if(ps&&ps.a!=null&&ps.b!=null){const x2=(p.x2&&p.x2["J"+md]===m.id)?2:1;if(ps.a===as.a&&ps.b===as.b){pts=P.exact*x2;res=x2>1?"exacto ×2":"exacto";}else if(sign(ps.a,ps.b)===sign(as.a,as.b)){pts=P.outcome;res="ganador";}}
+    else res="sin pronóstico";
+    det.push({id:m.id,md,home:f.home||m.a,away:f.away||m.b,as,ps,pts,res});});
+  det.sort((a,b)=>a.md-b.md||((FIXMETA[a.id].ts||"").localeCompare(FIXMETA[b.id].ts||"")));
+  return det;
+}
+function renderAudit(){
+  const v=document.getElementById("v-audit");
+  const rows=PLAYERS.map(p=>({p,sc:computePoints(p)})).sort((a,b)=>b.sc.total-a.sc.total);
+  const P=CFG.points;
+  let h=`<div class="band" data-c="slate"><div class="be">Transparencia</div><h2>Auditoría de puntos</h2><p>De dónde sale el puntaje de cada uno, partido por partido. Se recalcula solo, sobre los pronósticos cargados y los resultados reales.</p></div>`;
+  h+=`<div class="block"><h3>Cómo se cuenta cada punto</h3><div class="arules"><span>Exacto = ${P.exact}</span><span>Solo ganador = ${P.outcome}</span><span>Comodín ×2 duplica el exacto</span><span>Trivia = ${TRIVIA_PTS} al ganador del día</span><span>Bienvenida = ${WELCOME_PTS}</span><span>Ajuste = lo carga el organizador</span></div></div>`;
+  const wel=PLAYERS.filter(p=>p.welcome),adjs=PLAYERS.filter(p=>(Number(p.adj)||0)!==0);
+  if(wel.length||adjs.length){h+=`<div class="block"><h3>Puntos de arranque</h3><p class="sub">Para que quien se sumó con el prode ya empezado pueda competir de igual a igual.</p>`;
+    wel.forEach(p=>{h+=`<div class="bkr"><span>${esc(p.name)} · bienvenida</span><span class="v">+${WELCOME_PTS}</span></div>`;});
+    adjs.forEach(p=>{const a=Number(p.adj)||0;h+=`<div class="bkr"><span>${esc(p.name)} · ajuste de nivelación</span><span class="v">${a>0?"+":""}${a}</span></div>`;});
+    h+=`</div>`;}
+  h+=`<div class="block"><h3>Detalle por jugador</h3><p class="sub">Tocá un nombre para ver todos sus puntos.</p>`;
+  rows.forEach((r,i)=>{const det=playerMatchDetail(r.p),scored=det.filter(d=>d.pts>0),b=r.sc.bd;
+    h+=`<details class="adet"><summary><span>${i+1}. ${esc(r.p.name)}</span><span class="asum-t">${r.sc.total} pts</span></summary>`;
+    h+=`<div class="abrk">J1 ${b.J1} · J2 ${b.J2} · J3 ${b.J3}${b.Trivia?` · trivia ${b.Trivia}`:""}${b.Bienvenida?` · bienvenida ${b.Bienvenida}`:""}${b.Ajuste?` · ajuste ${b.Ajuste}`:""}</div>`;
+    if(scored.length){h+=`<table class="atab">`;scored.forEach(d=>{h+=`<tr><td class="amd">J${d.md}</td><td class="apt">${esc(d.home)} <b>${d.as.a}-${d.as.b}</b></td><td class="apr">vos ${d.ps?d.ps.a+"-"+d.ps.b:"—"}</td><td class="apx ${d.res.indexOf("exacto")===0?"e":"w"}">+${d.pts}</td></tr>`;});h+=`</table>`;}
+    else h+=`<p class="sub" style="padding:6px 2px 2px">Todavía no sumó puntos por pronósticos.</p>`;
+    h+=`</details>`;});
+  h+=`</div>`;
+  h+=`<div class="block"><button class="btn ghost" onclick="setView('tabla')">← Volver a la tabla</button></div>`;
+  v.innerHTML=h;
+}
+
 function computePoints(p){
   const P=CFG.points;
   const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Trivia:0,Bienvenida:0,Ajuste:0};
@@ -1451,8 +1500,9 @@ function renderTabla(){
   h+=`<div style="overflow-x:auto"><table class="ltbl"><tr><th></th><th style="text-align:left">Jugador</th><th>J1</th><th>J2</th><th>J3</th><th>Cuadro</th><th>Espec.</th><th>Total</th></tr>`;
   h+=rows.map((r,i)=>{const b=r.sc.bd;const cuadro=Math.round((b.Clasif+b.Octavos+b.Cuartos+b.Semis+b.Final+b.Campeón+b.ResKO)*10)/10;const esp=Math.round((b.Favoritos+b.Revelación+b.Goleador+b.MVP+b.Juvenil+b.Trivia+b.Bienvenida+b.Ajuste)*10)/10;
     return `<tr class="clk ${r.p.id===ME?"me":""}" data-d="${r.p.id}"><td class="rk ${i===0?"g1":""}">${i+1}</td><td class="nm">${esc(r.p.name)}${MEDALS[r.p.id]?` <span style="font-size:11px">🏅${MEDALS[r.p.id]>1?"×"+MEDALS[r.p.id]:""}</span>`:""}</td><td>${b.J1}</td><td>${b.J2}</td><td>${b.J3}</td><td>${cuadro}</td><td>${esp}</td><td class="tot">${r.sc.total}</td></tr>`;}).join("");
-  h+=`</table></div><div id="detailBody"></div>`;v.innerHTML=h;
+  h+=`</table></div><div style="margin-top:14px"><button class="btn ghost" id="auditBtn">🔍 Auditoría de puntos · transparencia</button></div><div id="detailBody"></div>`;v.innerHTML=h;
   document.getElementById("refreshBtn").onclick=async()=>{await loadPlayers();await syncLive();renderTabla();toast("Actualizado");};
+  const ab=document.getElementById("auditBtn");if(ab)ab.onclick=()=>setView("audit");
   v.querySelectorAll("tr[data-d]").forEach(tr=>tr.onclick=()=>{openDetail=openDetail===tr.dataset.d?null:tr.dataset.d;renderDetail();});
   renderDetail();
 }
