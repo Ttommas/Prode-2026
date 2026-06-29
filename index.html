@@ -1352,7 +1352,7 @@ function wireCuad(p){
   document.querySelectorAll("#pronInner input[data-ko]").forEach(inp=>inp.addEventListener("change",async()=>{const key=inp.dataset.ko;p.koScores=p.koScores||{};p.koScores[key]=p.koScores[key]||{};p.koScores[key][inp.dataset.side]=inp.value===""?null:Math.max(0,parseInt(inp.value)||0);await savePlayer(p);}));
   document.querySelectorAll("#pronInner [data-x2ko]").forEach(btn=>btn.onclick=async()=>{if(btn.disabled)return;const key=btn.dataset.x2ko;p.x2ko=(p.x2ko===key)?"":key;await savePlayer(p);renderPron();});
 }
-function koLocked(a,b,r){const fix=KO_FIX[pairKey(a,b)];if(fix&&fix.ts)return dlPassed(fix.ts);return false;}
+function koLocked(a,b,r){const fix=KO_FIX[pairKey(a,b)];if(fix&&fix.ts){const t=new Date(fix.ts).getTime();return isNaN(t)?false:Date.now()>=t;}return false;} // se bloquea al empezar el partido, igual que los grupos
 function koGridView(p){
   const bs=bracketState({scores:ACT.scores,bracket:ACT.bracket});
   let h=`<div class="band" data-c="blue"><div class="be">Cruces · marcador</div><h2>Tus pronósticos</h2><p>Cargá el marcador de cada cruce, como en grupos. Si ponés empate, elegí con el botón <b>G</b> quién gana por penales. Cada partido se bloquea cuando arranca.</p><div class="bignum">⚽</div></div>`;
@@ -1811,7 +1811,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: dos pestañas playoffs · marcador + penales · build 6</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: cruces se bloquean al empezar · build 7</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
