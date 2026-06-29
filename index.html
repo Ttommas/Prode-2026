@@ -382,6 +382,19 @@ input,select{font-family:var(--body)}
 .brsc input{width:30px;height:28px;text-align:center;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:700;font-family:var(--disp);background:var(--surface);color:var(--ink)}
 .brsc input:disabled{opacity:.5}
 .brsc .x{color:var(--mut);font-size:12px}
+.kox{padding:10px 0;border-top:1px solid var(--line2)}
+.kox:first-of-type{border-top:0}
+.kox.x2on{background:rgba(30,80,255,.04);border-radius:8px;padding:10px 8px}
+.kox.locked{opacity:.55}
+.koline{display:flex;align-items:center;gap:8px}
+.kot{flex:1;font-weight:600;font-size:13px;min-width:0}
+.kot.r{text-align:right}
+.kopen{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:8px;padding-left:2px}
+.kopl{font-size:11px;color:var(--mut)}
+.gbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:14px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.gbtn.on{background:var(--blue,#1E50FF);color:#fff;border-color:var(--blue,#1E50FF)}
+.gbtn:disabled{opacity:.5}
+.kolk{font-size:10px;color:var(--mut);margin-top:5px}
 .hm-mvp{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:14px}
 .hm-mvph{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .hm-mvph span:first-child{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:700}
@@ -508,7 +521,7 @@ const BRACKET_T=[
 const THIRD_SLOTS=["ABCDF","CDFGH","CEFHI","EHIJK","BEFIJ","AEHIJ","EFGIJ","DEIJL"];
 const COLNAMES=["Dieciseisavos","Octavos","Cuartos","Semis","Final"];
 const SETKEYS=["r16","qf","sf","fin","champ"];
-const DEFAULT_POINTS={exact:5,outcome:2,qualify:1,posbonus:1,r16:3,qf:5,sf:8,fin:12,champ:20,fav:6,rev:8,goleador:12,mvp:10,joven:8};
+const DEFAULT_POINTS={exact:5,outcome:2,qualify:1,posbonus:1,r16:3,qf:5,sf:8,fin:12,champ:20,koexact:3,fav:6,rev:8,goleador:12,mvp:10,joven:8};
 const GROUP_MIN=4; // mínimo de partidos cargados en un grupo para contar su clasificación
 
 /* listas según cuotas/encuestas (jun 2026) */
@@ -581,7 +594,7 @@ const TOUR_START="2026-06-11",TOUR_END="2026-07-19";
 function clampDate(s){return s<TOUR_START?TOUR_START:(s>TOUR_END?TOUR_END:s);}
 function dateRange(a,b){const out=[],d=new Date(a+"T00:00:00Z"),end=new Date(b+"T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
 function offsetDay(today,n){const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
-let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},KO_WINBYPAIR={},MEDALS={},TRIVIA_WINS={},TRIVIA_FROZEN={};
+let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},KO_WINBYPAIR={},KO_FIX={},MEDALS={},TRIVIA_WINS={},TRIVIA_FROZEN={};
 const MEDAL_PTS=3; // puntos por cada medalla (MVP del día)
 function pairKey(a,b){return [a,b].sort().join("~");}
 function artParts(iso){
@@ -622,7 +635,10 @@ function ingestEvents(evs){evs.forEach(e=>{
   if(m){const ls=(sh!=null&&sa!=null)?{a:(H===m.a)?sh:sa,b:(H===m.a)?sa:sh}:null;
     FIXMETA[m.id]=Object.assign(FIXMETA[m.id]||{},{date,artDate,ts:iso,home:H,away:A,status:st,ls,time,clock});
     if(isFinal(st)&&ls){LIVE.scores[m.id]={a:ls.a,b:ls.b};}}
-  else if(isFinal(st)&&sh!=null&&sa!=null&&date>="2026-06-28"){KO_LS[pairKey(H,A)]={[H]:sh,[A]:sa};let w=null;if(home.winner===true)w=H;else if(away.winner===true)w=A;else if(sh>sa)w=H;else if(sa>sh)w=A;if(w){LIVE.ko.push({date,win:w});KO_WINBYPAIR[pairKey(H,A)]=w;}}
+  else if(date>="2026-06-28"){
+    KO_FIX[pairKey(H,A)]={artDate,ts:iso,home:H,away:A,status:st,sh,sa};
+    if(isFinal(st)&&sh!=null&&sa!=null){KO_LS[pairKey(H,A)]={[H]:sh,[A]:sa};let w=null;if(home.winner===true)w=H;else if(away.winner===true)w=A;else if(sh>sa)w=H;else if(sa>sh)w=A;if(w){LIVE.ko.push({date,win:w});KO_WINBYPAIR[pairKey(H,A)]=w;}}
+  }
 });}
 function recomputeMatchdays(){GLET.forEach(g=>{
   const ms=MATCHES.filter(x=>x.g===g&&FIXMETA[x.id]&&FIXMETA[x.id].ts);
@@ -674,7 +690,7 @@ function applyLiveToAct(){let changed=false;
   }
   return changed;}
 async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSyncing=true;
-  try{LIVE={scores:{},ko:[]};KO_LS={};KO_WINBYPAIR={};
+  try{LIVE={scores:{},ko:[]};KO_LS={};KO_WINBYPAIR={};KO_FIX={};
     const now=new Date();const today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
     TODAY=today;TOMORROW=clampDate(offsetDay(today,1));TODAYGAMES=[];TOMORROWGAMES=[];
     const cached=Object.keys(FIXMETA).length;
@@ -1251,12 +1267,12 @@ function renderPron(){
   const v=document.getElementById("v-pron");const p=me();
   if(!p){v.innerHTML=`<div class="empty">No hay un jugador activo.</div>`;return;}
   const groupsOver=qualifiers(ACT.scores).complete;
-  if(groupsOver&&!pronInit){PRON="cuad";}pronInit=true;
+  if(groupsOver&&!pronInit){PRON="kog";}pronInit=true;
   const segs=groupsOver
-    ?[["cuad","blue","Cruces"],["esp","yellow","Especiales"],["marc","orange","Grupos"]]
+    ?[["kog","blue","Pronósticos"],["real","blue","Cuadro"],["esp","yellow","Especiales"],["marc","orange","Grupos"]]
     :[["marc","orange","Marcadores"],["cuad","blue","Cuadro"],["esp","yellow","Especiales"]];
   const lock=groupsOver
-    ?`🏆 Arrancaron los playoffs. Pronosticá los <b>cruces de cada ronda</b> en el cuadro (se bloquea 2 h antes de cada ronda). La fase de grupos ya cerró.`
+    ?`🏆 Arrancaron los playoffs. En <b>Pronósticos</b> cargás el marcador de cada cruce (cada partido se bloquea cuando empieza). En <b>Cuadro</b> ves cómo avanza el torneo en vivo.`
     :`✏️ Los marcadores los editás hasta que <b>empieza cada partido</b>; el cuadro hasta 2 h antes de cada ronda; los especiales hasta que termina la 2ª fecha. Después queda bloqueado. Lo cargado nunca se borra.`;
   v.innerHTML=`<div class="lockbar"><span class="st">${lock}</span></div>
   <div class="seg">${segs.map(s=>`<button data-seg="${s[0]}" data-c="${s[1]}" class="${PRON===s[0]?"on":""}">${s[2]}</button>`).join("")}</div><div id="pronInner"></div>`;
@@ -1264,6 +1280,8 @@ function renderPron(){
   const inner=document.getElementById("pronInner");
   if(PRON==="marc"){inner.innerHTML=marcView(p);wireMarc(p);}
   else if(PRON==="cuad"){inner.innerHTML=cuadView(p);wireCuad(p);}
+  else if(PRON==="kog"){inner.innerHTML=koGridView(p);wireKoGrid(p);}
+  else if(PRON==="real"){inner.innerHTML=koRealView();}
   else{inner.innerHTML=espView(p);wireEsp(p);}
 }
 function marcView(p){
@@ -1333,6 +1351,57 @@ function wireCuad(p){
   document.querySelectorAll("#pronInner [data-br]").forEach(btn=>btn.onclick=async()=>{const[r,m]=btn.dataset.br.split("-");if(roundLocked(SETKEYS[r])){toast("Esta ronda ya está bloqueada");return;}p.bracket=p.bracket||{};p.bracket[r+"-"+m]=btn.dataset.team;cleanBracket(p);await savePlayer(p);renderPron();});
   document.querySelectorAll("#pronInner input[data-ko]").forEach(inp=>inp.addEventListener("change",async()=>{const key=inp.dataset.ko;p.koScores=p.koScores||{};p.koScores[key]=p.koScores[key]||{};p.koScores[key][inp.dataset.side]=inp.value===""?null:Math.max(0,parseInt(inp.value)||0);await savePlayer(p);}));
   document.querySelectorAll("#pronInner [data-x2ko]").forEach(btn=>btn.onclick=async()=>{if(btn.disabled)return;const key=btn.dataset.x2ko;p.x2ko=(p.x2ko===key)?"":key;await savePlayer(p);renderPron();});
+}
+function koLocked(a,b,r){const fix=KO_FIX[pairKey(a,b)];if(fix&&fix.ts)return dlPassed(fix.ts);return false;}
+function koGridView(p){
+  const bs=bracketState({scores:ACT.scores,bracket:ACT.bracket});
+  let h=`<div class="band" data-c="blue"><div class="be">Cruces · marcador</div><h2>Tus pronósticos</h2><p>Cargá el marcador de cada cruce, como en grupos. Si ponés empate, elegí con el botón <b>G</b> quién gana por penales. Cada partido se bloquea cuando arranca.</p><div class="bignum">⚽</div></div>`;
+  if(!bs.complete){return h+`<div class="block"><h3>Esperando el cierre de grupos</h3><p class="sub">Cuando terminen los grupos aparecen los cruces de dieciseisavos.</p></div>`;}
+  h+=`<div class="progress">Tenés <b>un ×2</b> para toda la eliminatoria: si clavás el marcador exacto de ese cruce, vale doble.</div>`;
+  bs.cols.forEach((col,r)=>{
+    const def=col.filter(mt=>mt.a&&mt.b);
+    h+=`<div class="block"><h3>${COLNAMES[r]}</h3>`;
+    if(!def.length){h+=`<p class="sub" style="margin:0">Se habilita cuando se jueguen ${r>0?COLNAMES[r-1].toLowerCase():"los cruces anteriores"}.</p></div>`;return;}
+    col.forEach((mt,m)=>{
+      if(!mt.a||!mt.b)return;
+      const key=r+"-"+m;const ks=(p.koScores&&p.koScores[key])||{};
+      const lk=koLocked(mt.a,mt.b,r);const x2on=(p.x2ko===key);
+      const draw=(ks.a!=null&&ks.b!=null&&Number(ks.a)===Number(ks.b));const gsel=ks.g||"";
+      h+=`<div class="kox ${lk?"locked":""} ${x2on?"x2on":""}">
+        <div class="koline">
+          <span class="kot">${teamSpan(mt.a)}</span>
+          <span class="brsc" style="margin:0"><input type="number" min="0" max="20" ${lk?"disabled":""} data-ko="${key}" data-side="a" value="${ks.a??""}"><span class="x">:</span><input type="number" min="0" max="20" ${lk?"disabled":""} data-ko="${key}" data-side="b" value="${ks.b??""}"></span>
+          <span class="kot r">${teamSpan(mt.b)}</span>
+          <button class="x2chip sm ${x2on?"on":""}" ${lk?"disabled":""} data-x2ko="${key}">×2</button>
+        </div>`;
+      if(draw){h+=`<div class="kopen"><span class="kopl">Empate · gana por penales:</span><button class="gbtn ${gsel==="a"?"on":""}" ${lk?"disabled":""} data-kog="${key}" data-side="a">G · ${esc(mt.a)}</button><button class="gbtn ${gsel==="b"?"on":""}" ${lk?"disabled":""} data-kog="${key}" data-side="b">G · ${esc(mt.b)}</button></div>`;}
+      if(lk)h+=`<div class="kolk">🔒 partido jugado o en curso</div>`;
+      h+=`</div>`;
+    });
+    h+=`</div>`;
+  });
+  return h;
+}
+function wireKoGrid(p){
+  document.querySelectorAll("#pronInner input[data-ko]").forEach(inp=>inp.addEventListener("change",async()=>{
+    const key=inp.dataset.ko;p.koScores=p.koScores||{};p.koScores[key]=p.koScores[key]||{};
+    p.koScores[key][inp.dataset.side]=inp.value===""?null:Math.max(0,parseInt(inp.value)||0);
+    const ks=p.koScores[key];if(ks.a!=null&&ks.b!=null&&Number(ks.a)!==Number(ks.b))delete ks.g;
+    await savePlayer(p);renderPron();
+  }));
+  document.querySelectorAll("#pronInner [data-kog]").forEach(btn=>btn.onclick=async()=>{if(btn.disabled)return;const key=btn.dataset.kog;p.koScores=p.koScores||{};p.koScores[key]=p.koScores[key]||{};p.koScores[key].g=btn.dataset.side;await savePlayer(p);renderPron();});
+  document.querySelectorAll("#pronInner [data-x2ko]").forEach(btn=>btn.onclick=async()=>{if(btn.disabled)return;const key=btn.dataset.x2ko;p.x2ko=(p.x2ko===key)?"":key;await savePlayer(p);renderPron();});
+}
+function koRoTeam(team,winner){if(!team)return `<div class="brteam empty">—</div>`;const isW=winner===team;return `<div class="brteam ${isW?"win":""}" style="cursor:default">${flag(team)}<span class="nm">${team}</span></div>`;}
+function koRealView(){
+  const bs=bracketState({scores:ACT.scores,bracket:ACT.bracket});
+  let h=`<div class="band" data-c="blue"><div class="be">Cuadro real</div><h2>Cómo va el torneo</h2><p>El avance real, en vivo desde ESPN. El ganador de cada cruce se resuelve solo (contempla penales).</p><div class="bignum">🏆</div></div>`;
+  if(!bs.complete){return h+`<div class="block"><h3>Esperando el cierre de grupos</h3></div>`;}
+  h+=`<div class="block"><h3>Cuadro</h3><div class="bracket">`;
+  bs.cols.forEach((col,r)=>{h+=`<div class="bcol"><div class="ch">${COLNAMES[r]}</div>`;col.forEach((mt,m)=>{h+=`<div class="bmatch">${koRoTeam(mt.a,mt.winner)}${koRoTeam(mt.b,mt.winner)}</div>`;});h+=`</div>`;});
+  const champ=bs.cols[4][0].winner;
+  h+=`<div class="bcol"><div class="ch">Campeón</div><div class="champ-box"><div class="cl">🏆 Campeón</div><div class="cv">${champ?flag(champ)+" "+champ:"—"}</div></div></div>`;
+  return h+`</div></div>`;
 }
 
 function espView(p){
@@ -1500,15 +1569,18 @@ function computePoints(p){
     thirds.sort((x,y)=>y.pts-x.pts||y.dif-x.dif||y.gf-x.gf||x.t.localeCompare(y.t));
     thirds.slice(0,8).forEach(o=>{if(aq.thirds.includes(o.t))bd.Clasif+=P.qualify;});
   }
-  const ds=derivedSets(p);
-  const rmap={r16:["Octavos",P.r16],qf:["Cuartos",P.qf],sf:["Semis",P.sf],fin:["Final",P.fin]};
-  Object.keys(rmap).forEach(k=>{const[lab,val]=rmap[k];(ds[k]||[]).forEach(t=>{if((ACT.rounds[k]||[]).includes(t))bd[lab]+=val;});});
-  if(ds.champ&&ACT.champ&&ds.champ===ACT.champ)bd.Campeón+=P.champ;
-  // resultados exactos de los cruces de playoffs (suman si tu cruce coincide con el real)
-  if(p.koScores&&Object.keys(p.koScores).length){const bs=bracketState(p);if(bs.complete)bs.cols.forEach((col,r)=>col.forEach((mt,m)=>{
-    if(!mt.a||!mt.b)return;const key=r+"-"+m;const ks=p.koScores[key];if(!ks||ks.a==null||ks.b==null)return;
-    const real=KO_LS[pairKey(mt.a,mt.b)];if(!real)return;const ra=real[mt.a],rb=real[mt.b];if(ra==null||rb==null)return;
-    if(ks.a===ra&&ks.b===rb)bd.ResKO+=P.exact*((p.x2ko===key)?2:1);else if(sign(ks.a,ks.b)===sign(ra,rb))bd.ResKO+=P.outcome;
+  // Playoffs: por cada cruce real resuelto, acertar quién pasa da los puntos de esa ronda; el marcador exacto suma bonus.
+  const colPts=[["Octavos","r16"],["Cuartos","qf"],["Semis","sf"],["Final","fin"],["Campeón","champ"]];
+  const realBS=bracketState({scores:ACT.scores,bracket:ACT.bracket});
+  if(realBS.complete&&p.koScores){realBS.cols.forEach((col,r)=>col.forEach((mt,m)=>{
+    if(!mt.a||!mt.b||!mt.winner)return;
+    const key=r+"-"+m;const ks=p.koScores[key];if(!ks||ks.a==null||ks.b==null)return;
+    const a=Number(ks.a),b=Number(ks.b);
+    const predW=a>b?mt.a:b>a?mt.b:(ks.g==="a"?mt.a:ks.g==="b"?mt.b:null);
+    const[lab,pk]=colPts[r];
+    if(predW&&predW===mt.winner)bd[lab]+=P[pk];
+    const real=KO_LS[pairKey(mt.a,mt.b)];
+    if(real){const ra=real[mt.a],rb=real[mt.b];if(ra!=null&&rb!=null&&a===ra&&b===rb)bd.ResKO+=(P.koexact||3)*((p.x2ko===key)?2:1);}
   }));}
   (p.fav||[]).forEach(t=>{if((ACT.rounds.sf||[]).includes(t))bd.Favoritos+=P.fav;});
   (p.rev||[]).forEach(t=>{if((ACT.rounds.qf||[]).includes(t))bd.Revelación+=P.rev;});
@@ -1625,7 +1697,10 @@ const CFACTS={
 function normTxt(s){return (""+(s==null?"":s)).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");}
 function seedRand(seed){let s=2166136261>>>0;for(let i=0;i<seed.length;i++){s^=seed.charCodeAt(i);s=Math.imul(s,16777619);}return function(){s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};}
 function shuffleArr(a,r){for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
-function triviaPool(date){const set=[];MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.artDate===date){[m.a,m.b].forEach(t=>{if(CFACTS[t]&&set.indexOf(t)<0)set.push(t);});}});return set;}
+function triviaPool(date){const set=[];
+  MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.artDate===date){[m.a,m.b].forEach(t=>{if(CFACTS[t]&&set.indexOf(t)<0)set.push(t);});}});
+  Object.keys(KO_FIX).forEach(k=>{const f=KO_FIX[k];if(f.artDate===date){[f.home,f.away].forEach(t=>{if(CFACTS[t]&&set.indexOf(t)<0)set.push(t);});}});
+  return set;}
 function mcQ(country,kind,r){
   if(kind==="conf"){const correct=CFACTS[country].conf;const confs=["Conmebol","UEFA","Concacaf","CAF","AFC","OFC"];const opts=[correct].concat(shuffleArr(confs.filter(c=>c!==correct),r).slice(0,3));shuffleArr(opts,r);return {type:"mc",country,q:`¿A qué confederación pertenece ${country}?`,options:opts,correct};}
   const correct=CFACTS[country].cap;const others=shuffleArr(Object.keys(CFACTS).filter(k=>k!==country&&CFACTS[k].cap!==correct).map(k=>CFACTS[k].cap),r);const opts=[correct,others[0],others[1],others[2]];shuffleArr(opts,r);return {type:"mc",country,q:`¿Cuál es la capital de ${country}?`,options:opts,correct};
@@ -1727,7 +1802,7 @@ function startTrivia(date,t,p){
 }
 
 /* ===================== REGLAMENTO ===================== */
-const RULE_DEFS=[["exact","Marcador exacto (grupos)"],["outcome","Solo ganador / empate / derrota"],["qualify","Cada clasificado correcto (top 2 o mejor tercero)"],["posbonus","Extra si acertás 1° o 2° exacto"],["r16","Cada equipo que llega a octavos"],["qf","…a cuartos"],["sf","…a semis"],["fin","…a la final"],["champ","Campeón"],["fav","Favorito que llega a semis"],["rev","Revelación que llega a cuartos"],["goleador","Goleador del torneo"],["mvp","MVP del torneo"],["joven","Jugador joven del torneo"]];
+const RULE_DEFS=[["exact","Marcador exacto (grupos)"],["outcome","Solo ganador / empate / derrota"],["qualify","Cada clasificado correcto (top 2 o mejor tercero)"],["posbonus","Extra si acertás 1° o 2° exacto"],["r16","Quién gana cada cruce de dieciseisavos"],["qf","…de octavos"],["sf","…de cuartos"],["fin","…de semis"],["champ","Quién gana la final (campeón)"],["koexact","Marcador exacto de un cruce (bonus)"],["fav","Favorito que llega a semis"],["rev","Revelación que llega a cuartos"],["goleador","Goleador del torneo"],["mvp","MVP del torneo"],["joven","Jugador joven del torneo"]];
 function renderReglas(){
   const v=document.getElementById("v-reglas");const ed=ORG;
   let h=`<div class="band" data-c="slate"><div class="be">03 · Cómo se suma</div><h2>Reglamento</h2><p>${ed?"Editá los puntajes; valen para todo el grupo.":"Solo el organizador puede cambiar los puntajes."}</p><div class="bignum">PTS</div></div>`;
@@ -1736,7 +1811,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: playoffs en vivo · cuadro automático · build 4</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: dos pestañas playoffs · marcador + penales · build 6</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
