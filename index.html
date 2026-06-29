@@ -537,7 +537,7 @@ const store={
 /* ===================== ESTADO ===================== */
 let CFG={points:{...DEFAULT_POINTS},penalty:60,orgCode:""};
 let ACT={scores:{},rounds:{r16:[],qf:[],sf:[],fin:[]},champ:"",goleador:"",mvp:"",joven:"",bracket:{}};
-let PLAYERS=[],ME=null,ORG=false,VIEW="home",PRON="marc",openDetail=null;
+let PLAYERS=[],ME=null,ORG=false,VIEW="home",PRON="marc",pronInit=false,openDetail=null;
 
 function uid(){return Math.random().toString(36).slice(2,9);}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1600);}
@@ -1238,8 +1238,15 @@ function snapshot(p){return JSON.parse(JSON.stringify({bracket:p.bracket,fav:p.f
 function renderPron(){
   const v=document.getElementById("v-pron");const p=me();
   if(!p){v.innerHTML=`<div class="empty">No hay un jugador activo.</div>`;return;}
-  const segs=[["marc","orange","Marcadores"],["cuad","blue","Cuadro"],["esp","yellow","Especiales"]];
-  v.innerHTML=`<div class="lockbar"><span class="st">✏️ Los marcadores los editás hasta que <b>empieza cada partido</b>; el cuadro hasta 2 h antes de cada ronda; los especiales hasta que termina la 2ª fecha. Después queda bloqueado. Lo cargado nunca se borra.</span></div>
+  const groupsOver=qualifiers(ACT.scores).complete;
+  if(groupsOver&&!pronInit){PRON="cuad";}pronInit=true;
+  const segs=groupsOver
+    ?[["cuad","blue","Cruces"],["esp","yellow","Especiales"],["marc","orange","Grupos"]]
+    :[["marc","orange","Marcadores"],["cuad","blue","Cuadro"],["esp","yellow","Especiales"]];
+  const lock=groupsOver
+    ?`🏆 Arrancaron los playoffs. Pronosticá los <b>cruces de cada ronda</b> en el cuadro (se bloquea 2 h antes de cada ronda). La fase de grupos ya cerró.`
+    :`✏️ Los marcadores los editás hasta que <b>empieza cada partido</b>; el cuadro hasta 2 h antes de cada ronda; los especiales hasta que termina la 2ª fecha. Después queda bloqueado. Lo cargado nunca se borra.`;
+  v.innerHTML=`<div class="lockbar"><span class="st">${lock}</span></div>
   <div class="seg">${segs.map(s=>`<button data-seg="${s[0]}" data-c="${s[1]}" class="${PRON===s[0]?"on":""}">${s[2]}</button>`).join("")}</div><div id="pronInner"></div>`;
   v.querySelectorAll("[data-seg]").forEach(b=>b.onclick=()=>{PRON=b.dataset.seg;renderPron();});
   const inner=document.getElementById("pronInner");
@@ -1249,6 +1256,11 @@ function renderPron(){
 }
 function marcView(p){
   let done=MATCHES.filter(m=>{const s=p.scores[m.id];return s&&s.a!=null&&s.b!=null;}).length;
+  if(qualifiers(ACT.scores).complete){
+    return `<div class="band" data-c="orange"><div class="be">Fase de grupos · cerrada</div><h2>Grupos finalizados</h2><p>La fase de grupos terminó y los marcadores ya no se editan. Tus pronósticos quedaron registrados y siguen sumando.</p><div class="bignum">✓</div></div>`+
+      `<div class="progress">Cargaste <b>${done}</b>/72 partidos. El detalle de lo que sumaste lo ves en la <b>Tabla</b> (tocá tu nombre) o en la <b>Auditoría</b>.</div>`+
+      `<div class="block" style="text-align:center"><p class="sub" style="margin:0">Ahora la acción está en el <b>Cuadro</b>: pasá a la pestaña <b>Cruces</b> para pronosticar los playoffs.</p></div>`;
+  }
   let h=`<div class="band" data-c="orange"><div class="be">01 · Marcadores exactos</div><h2>Fase de grupos</h2><p>Tu resultado para los 72 partidos. Con esto se arma solo tu cuadro de cruces (incluidos los mejores terceros).</p><div class="bignum">72</div></div>`;
   h+=`<div class="progress">Cargados <b>${done}</b>/72 partidos · cada partido se bloquea cuando empieza</div>`;
   // panel del comodín ×2 (un partido por fecha)
@@ -1712,7 +1724,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: clasificación por grupo + cuadro real · build 2</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: playoffs · pronósticos en cruces · build 3</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
