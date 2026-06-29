@@ -508,7 +508,8 @@ const BRACKET_T=[
 const THIRD_SLOTS=["ABCDF","CDFGH","CEFHI","EHIJK","BEFIJ","AEHIJ","EFGIJ","DEIJL"];
 const COLNAMES=["Dieciseisavos","Octavos","Cuartos","Semis","Final"];
 const SETKEYS=["r16","qf","sf","fin","champ"];
-const DEFAULT_POINTS={exact:5,outcome:2,qualify:2,posbonus:1,r16:3,qf:5,sf:8,fin:12,champ:20,fav:6,rev:8,goleador:12,mvp:10,joven:8};
+const DEFAULT_POINTS={exact:5,outcome:2,qualify:1,posbonus:1,r16:3,qf:5,sf:8,fin:12,champ:20,fav:6,rev:8,goleador:12,mvp:10,joven:8};
+const GROUP_MIN=4; // mínimo de partidos cargados en un grupo para contar su clasificación
 
 /* listas según cuotas/encuestas (jun 2026) */
 const FAVORITES=["España","Francia","Brasil","Inglaterra","Argentina","Portugal","Alemania","Países Bajos"];
@@ -1068,14 +1069,15 @@ function resolveSlot(lbl,q,alloc){
 }
 function seeds32(q){const alloc=thirdAlloc(q);return BRACKET_T.flatMap(m=>[resolveSlot(m[0],q,alloc),resolveSlot(m[1],q,alloc)]);}
 function cleanBracket(p){
-  const q=qualifiers(p.scores);if(!q.complete)return;
+  const q=activeQual(p);if(!q.complete)return;
   let parts=seeds32(q);
   for(let r=0;r<5;r++){const nM=parts.length/2;const winners=[];
     for(let m=0;m<nM;m++){const a=parts[2*m],b=parts[2*m+1];const key=r+"-"+m;let w=p.bracket[key];if(w!==a&&w!==b){delete p.bracket[key];w=null;}winners.push(w);}
     parts=winners;}
 }
+function activeQual(p){const real=qualifiers(ACT.scores);return real.complete?real:qualifiers(p.scores);}
 function bracketState(p){
-  const q=qualifiers(p.scores);if(!q.complete)return {complete:false,q};
+  const q=activeQual(p);if(!q.complete)return {complete:false,q};
   const cols=[];let parts=seeds32(q);
   for(let r=0;r<5;r++){const nM=parts.length/2;const matches=[];
     for(let m=0;m<nM;m++){const a=parts[2*m],b=parts[2*m+1];const w=p.bracket?p.bracket[r+"-"+m]:null;const winner=(w===a||w===b)?w:null;matches.push({a,b,winner});}
@@ -1461,11 +1463,18 @@ function computePoints(p){
   const bd={J1:0,J2:0,J3:0,Clasif:0,Octavos:0,Cuartos:0,Semis:0,Final:0,Campeón:0,Favoritos:0,Revelación:0,Goleador:0,MVP:0,Juvenil:0,ResKO:0,Trivia:0,Bienvenida:0,Ajuste:0};
   MATCHES.forEach(m=>{const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;
     const k="J"+mdOf(m);if(ps.a===as.a&&ps.b===as.b)bd[k]+=P.exact*((p.x2&&p.x2[k]===m.id)?2:1);else if(sign(ps.a,ps.b)===sign(as.a,as.b))bd[k]+=P.outcome;});
-  const pq=qualifiers(p.scores),aq=qualifiers(ACT.scores);
-  if(pq.complete&&aq.complete){
-    GLET.forEach(g=>{const aTop=[aq.winners[g],aq.runners[g]];
-      [[pq.winners[g],aq.winners[g]],[pq.runners[g],aq.runners[g]]].forEach(([pick,exact])=>{if(aTop.includes(pick)){bd.Clasif+=P.qualify;if(pick===exact)bd.Clasif+=P.posbonus;}});});
-    pq.thirds.forEach(t=>{if(aq.thirds.includes(t))bd.Clasif+=P.qualify;});
+  const aq=qualifiers(ACT.scores);
+  if(aq.complete){
+    const thirds=[];
+    GLET.forEach(g=>{
+      const carg=MATCHES.filter(m=>m.g===g&&p.scores[m.id]&&p.scores[m.id].a!=null&&p.scores[m.id].b!=null).length;
+      if(carg<GROUP_MIN)return;
+      const r=tableFrom(p.scores,g).rows,aTop=[aq.winners[g],aq.runners[g]];
+      [[r[0].t,aq.winners[g]],[r[1].t,aq.runners[g]]].forEach(([pick,exact])=>{if(aTop.includes(pick)){bd.Clasif+=P.qualify;if(pick===exact)bd.Clasif+=P.posbonus;}});
+      thirds.push(r[2]);
+    });
+    thirds.sort((x,y)=>y.pts-x.pts||y.dif-x.dif||y.gf-x.gf||x.t.localeCompare(y.t));
+    thirds.slice(0,8).forEach(o=>{if(aq.thirds.includes(o.t))bd.Clasif+=P.qualify;});
   }
   const ds=derivedSets(p);
   const rmap={r16:["Octavos",P.r16],qf:["Cuartos",P.qf],sf:["Semis",P.sf],fin:["Final",P.fin]};
@@ -1703,6 +1712,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: clasificación por grupo + cuadro real · build 2</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
