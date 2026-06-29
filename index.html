@@ -581,7 +581,7 @@ const TOUR_START="2026-06-11",TOUR_END="2026-07-19";
 function clampDate(s){return s<TOUR_START?TOUR_START:(s>TOUR_END?TOUR_END:s);}
 function dateRange(a,b){const out=[],d=new Date(a+"T00:00:00Z"),end=new Date(b+"T00:00:00Z");while(d<=end){out.push(d.toISOString().slice(0,10));d.setUTCDate(d.getUTCDate()+1);}return out;}
 function offsetDay(today,n){const d=new Date(today+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
-let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},MEDALS={},TRIVIA_WINS={},TRIVIA_FROZEN={};
+let TODAY="",TOMORROW="",TODAYGAMES=[],TOMORROWGAMES=[],GOALS={},GOALS_JSON="",ASSISTS=[],ASSISTS_JSON="",KO_LS={},KO_WINBYPAIR={},MEDALS={},TRIVIA_WINS={},TRIVIA_FROZEN={};
 const MEDAL_PTS=3; // puntos por cada medalla (MVP del día)
 function pairKey(a,b){return [a,b].sort().join("~");}
 function artParts(iso){
@@ -622,7 +622,7 @@ function ingestEvents(evs){evs.forEach(e=>{
   if(m){const ls=(sh!=null&&sa!=null)?{a:(H===m.a)?sh:sa,b:(H===m.a)?sa:sh}:null;
     FIXMETA[m.id]=Object.assign(FIXMETA[m.id]||{},{date,artDate,ts:iso,home:H,away:A,status:st,ls,time,clock});
     if(isFinal(st)&&ls){LIVE.scores[m.id]={a:ls.a,b:ls.b};}}
-  else if(isFinal(st)&&sh!=null&&sa!=null&&date>="2026-06-28"){KO_LS[pairKey(H,A)]={[H]:sh,[A]:sa};let w=null;if(sh>sa)w=H;else if(sa>sh)w=A;if(w)LIVE.ko.push({date,win:w});}
+  else if(isFinal(st)&&sh!=null&&sa!=null&&date>="2026-06-28"){KO_LS[pairKey(H,A)]={[H]:sh,[A]:sa};let w=null;if(home.winner===true)w=H;else if(away.winner===true)w=A;else if(sh>sa)w=H;else if(sa>sh)w=A;if(w){LIVE.ko.push({date,win:w});KO_WINBYPAIR[pairKey(H,A)]=w;}}
 });}
 function recomputeMatchdays(){GLET.forEach(g=>{
   const ms=MATCHES.filter(x=>x.g===g&&FIXMETA[x.id]&&FIXMETA[x.id].ts);
@@ -655,14 +655,26 @@ async function fetchAssists(){
 function mdOf(m){return (FIXMETA[m.id]&&FIXMETA[m.id].md)||m.md;}
 function applyLiveToAct(){let changed=false;
   Object.keys(LIVE.scores).forEach(id=>{const s=LIVE.scores[id],cur=ACT.scores[id];if(!cur||cur.a!==s.a||cur.b!==s.b){ACT.scores[id]={a:s.a,b:s.b};changed=true;}});
-  const manualBracket=ACT.bracket&&Object.keys(ACT.bracket).length>0;
-  if(LIVE.ko.length&&!manualBracket){const reached={r16:new Set(),qf:new Set(),sf:new Set(),fin:new Set()};let champ="";
-    LIVE.ko.forEach(k=>{KO_WIN.forEach(w=>{if(k.date>=w.from&&k.date<=w.to)reached[w.key].add(k.win);});if(k.date===FINAL_DATE)champ=k.win;});
-    ["r16","qf","sf","fin"].forEach(key=>{if(reached[key].size){const arr=[...reached[key]];if(JSON.stringify((ACT.rounds[key]||[]).slice().sort())!==JSON.stringify(arr.slice().sort())){ACT.rounds[key]=arr;changed=true;}}});
-    if(champ&&ACT.champ!==champ){ACT.champ=champ;changed=true;}}
+  // Cuadro real: se resuelve cruce por cruce desde ESPN, respetando correcciones manuales del organizador.
+  if(Object.keys(KO_WINBYPAIR).length&&qualifiers(ACT.scores).complete){
+    const ab=Object.assign({},ACT.bracket||{});
+    for(let iter=0;iter<6;iter++){
+      const bs=bracketState({scores:ACT.scores,bracket:ab});
+      if(!bs.complete)break;
+      let added=false;
+      bs.cols.forEach((col,r)=>col.forEach((mt,m)=>{const key=r+"-"+m;
+        if(mt.a&&mt.b&&!ab[key]){const w=KO_WINBYPAIR[pairKey(mt.a,mt.b)];if(w===mt.a||w===mt.b){ab[key]=w;added=true;}}}));
+      if(!added)break;
+    }
+    if(JSON.stringify(ab)!==JSON.stringify(ACT.bracket||{})){
+      ACT.bracket=ab;changed=true;
+      const ds=derivedSets({scores:ACT.scores,bracket:ab});
+      ACT.rounds={r16:ds.r16,qf:ds.qf,sf:ds.sf,fin:ds.fin};ACT.champ=ds.champ||"";
+    }
+  }
   return changed;}
 async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSyncing=true;
-  try{LIVE={scores:{},ko:[]};KO_LS={};
+  try{LIVE={scores:{},ko:[]};KO_LS={};KO_WINBYPAIR={};
     const now=new Date();const today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
     TODAY=today;TOMORROW=clampDate(offsetDay(today,1));TODAYGAMES=[];TOMORROWGAMES=[];
     const cached=Object.keys(FIXMETA).length;
@@ -1724,7 +1736,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: playoffs · pronósticos en cruces · build 3</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: playoffs en vivo · cuadro automático · build 4</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
