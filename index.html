@@ -504,14 +504,14 @@ const BRACKET_T=[
  ["1I","T:CDFGH"], // M77
  ["2A","2B"],      // M73
  ["1F","2C"],      // M75
- ["1C","2F"],      // M76
- ["2E","2I"],      // M78
- ["1A","T:CEFHI"], // M79
- ["1L","T:EHIJK"], // M80
  ["2K","2L"],      // M83
  ["1H","2J"],      // M84
  ["1D","T:BEFIJ"], // M81
  ["1G","T:AEHIJ"], // M82
+ ["1C","2F"],      // M76
+ ["2E","2I"],      // M78
+ ["1A","T:CEFHI"], // M79
+ ["1L","T:EHIJK"], // M80
  ["1J","2H"],      // M86
  ["2D","2G"],      // M88
  ["1B","T:EFGIJ"], // M85
@@ -1089,8 +1089,18 @@ function qualifiers(scores){
 }
 // Asigna los 8 mejores terceros a los 8 cupos respetando los grupos permitidos
 // (matching con backtracking; cupos más restringidos primero, tercero mejor rankeado primero).
+// Tabla oficial FIFA (Anexo C) para la asignación de terceros según los grupos clasificados.
+// Clave = grupos de los 8 terceros (ordenados); valor = slot -> grupo del tercero.
+const FIFA_THIRD_TABLE={
+  "BDEFIJKL":{ABCDF:"D",CDFGH:"F",CEFHI:"E",EHIJK:"K",BEFIJ:"B",AEHIJ:"I",EFGIJ:"J",DEIJL:"L"}
+};
 function thirdAlloc(q){
   const thirds=(q.thirdsObj||[]).slice(0,8).map(o=>({t:o.t,g:o.g})); // ya vienen ordenados por ranking
+  const combo=thirds.map(t=>t.g).slice().sort().join("");
+  const tbl=FIFA_THIRD_TABLE[combo];
+  if(tbl){const byG={};thirds.forEach(t=>byG[t.g]=t.t);const res={};let ok=true;
+    THIRD_SLOTS.forEach(s=>{const g=tbl[s];if(g&&byG[g])res[s]=byG[g];else ok=false;});
+    if(ok)return res;}
   const slots=THIRD_SLOTS.map(set=>({set,allow:new Set(set.split(""))}));
   const order=slots.map((s,i)=>i).sort((a,b)=>{
     const ca=thirds.filter(t=>slots[a].allow.has(t.g)).length;
@@ -1835,7 +1845,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: mvp y stats con playoffs · build 8</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: cuadro oficial FIFA corregido · build 9</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
