@@ -999,8 +999,24 @@ function checkRank(rows){
   }
 }
 function evalRankPopups(){try{const rows=PLAYERS.map(p=>({p,sc:computePoints(p)})).sort((x,y)=>y.sc.total-x.sc.total);checkLeader(rows);checkRank(rows);}catch(e){}}
-function dayScore(p,day){const P=CFG.points;let pts=0;MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(!f||f.artDate!==day||!isFinal(f.status))return;const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;const x2=(p.x2&&p.x2["J"+mdOf(m)]===m.id)?2:1;if(ps.a===as.a&&ps.b===as.b)pts+=P.exact*x2;else if(sign(ps.a,ps.b)===sign(as.a,as.b))pts+=P.outcome;});return pts;}
-function dayBuckets(){const b={};MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.artDate)(b[f.artDate]=b[f.artDate]||[]).push(f);});return b;}
+function koDayScore(p,day){
+  if(!p.koScores)return 0;const P=CFG.points;let pts=0;
+  const bs=bracketState({scores:ACT.scores,bracket:ACT.bracket});if(!bs.complete)return 0;
+  const pk=["r16","qf","sf","fin","champ"];
+  bs.cols.forEach((col,r)=>col.forEach((mt,m)=>{
+    if(!mt.a||!mt.b||!mt.winner)return;
+    const fix=KO_FIX[pairKey(mt.a,mt.b)];if(!fix||fix.artDate!==day)return;
+    const key=r+"-"+m;const ks=p.koScores[key];if(!ks||ks.a==null||ks.b==null)return;
+    const a=Number(ks.a),b=Number(ks.b);
+    const predW=a>b?mt.a:b>a?mt.b:(ks.g==="a"?mt.a:ks.g==="b"?mt.b:null);
+    if(predW&&predW===mt.winner)pts+=P[pk[r]];
+    const real=KO_LS[pairKey(mt.a,mt.b)];
+    if(real){const ra=real[mt.a],rb=real[mt.b];if(ra!=null&&rb!=null&&a===ra&&b===rb)pts+=(P.koexact||3)*((p.x2ko===key)?2:1);}
+  }));
+  return pts;
+}
+function dayScore(p,day){const P=CFG.points;let pts=0;MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(!f||f.artDate!==day||!isFinal(f.status))return;const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;const x2=(p.x2&&p.x2["J"+mdOf(m)]===m.id)?2:1;if(ps.a===as.a&&ps.b===as.b)pts+=P.exact*x2;else if(sign(ps.a,ps.b)===sign(as.a,as.b))pts+=P.outcome;});return pts+koDayScore(p,day);}
+function dayBuckets(){const b={};MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(f&&f.artDate)(b[f.artDate]=b[f.artDate]||[]).push(f);});Object.keys(KO_FIX).forEach(k=>{const f=KO_FIX[k];if(f.artDate)(b[f.artDate]=b[f.artDate]||[]).push({artDate:f.artDate,status:f.status});});return b;}
 function lastClosedDay(){const b=dayBuckets();let last="";Object.keys(b).sort().forEach(d=>{if(b[d].length&&b[d].every(f=>isFinal(f.status)))last=d;});return last;}
 function dayMVP(day){if(!day)return null;const rows=PLAYERS.map(p=>({p,pts:dayScore(p,day)})).filter(r=>r.pts>0).sort((a,b)=>b.pts-a.pts||a.p.name.localeCompare(b.p.name));return rows.length?{day,rows}:null;}
 function computeMedals(){MEDALS={};const b=dayBuckets();Object.keys(b).forEach(d=>{if(!b[d].length||!b[d].every(f=>isFinal(f.status)))return;const mv=dayMVP(d);if(mv&&mv.rows.length)MEDALS[mv.rows[0].p.id]=(MEDALS[mv.rows[0].p.id]||0)+1;});}
@@ -1008,6 +1024,14 @@ function playerRank(id){const rows=PLAYERS.map(p=>({id:p.id,t:computePoints(p).t
 function playerStats(p){
   let exact=0,outcome=0,miss=0,played=0;
   MATCHES.forEach(m=>{const f=FIXMETA[m.id];if(!f||!isFinal(f.status))return;const ps=p.scores[m.id],as=ACT.scores[m.id];if(!ps||ps.a==null||ps.b==null||!as||as.a==null||as.b==null)return;played++;if(ps.a===as.a&&ps.b===as.b)exact++;else if(sign(ps.a,ps.b)===sign(as.a,as.b))outcome++;else miss++;});
+  const bs=bracketState({scores:ACT.scores,bracket:ACT.bracket});
+  if(bs.complete&&p.koScores)bs.cols.forEach((col,r)=>col.forEach((mt,m)=>{
+    if(!mt.a||!mt.b||!mt.winner)return;const key=r+"-"+m;const ks=p.koScores[key];if(!ks||ks.a==null||ks.b==null)return;
+    played++;const a=Number(ks.a),b=Number(ks.b);
+    const predW=a>b?mt.a:b>a?mt.b:(ks.g==="a"?mt.a:ks.g==="b"?mt.b:null);
+    const real=KO_LS[pairKey(mt.a,mt.b)];const ra=real?real[mt.a]:null,rb=real?real[mt.b]:null;
+    if(ra!=null&&rb!=null&&a===ra&&b===rb)exact++;else if(predW&&predW===mt.winner)outcome++;else miss++;
+  }));
   let bestDay=0;const b=dayBuckets();Object.keys(b).forEach(d=>{if(b[d].length&&b[d].every(f=>isFinal(f.status))){const s=dayScore(p,d);if(s>bestDay)bestDay=s;}});
   const hit=exact+outcome,pct=played?Math.round(hit/played*100):0;
   return {exact,outcome,miss,played,hit,pct,bestDay,medals:MEDALS[p.id]||0,total:computePoints(p).total,rank:playerRank(p.id)};
@@ -1811,7 +1835,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: cruces se bloquean al empezar · build 7</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: mvp y stats con playoffs · build 8</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
