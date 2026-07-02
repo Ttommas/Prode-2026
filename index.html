@@ -699,7 +699,7 @@ async function syncLive(opts){opts=opts||{};if(liveSyncing)return false;liveSync
     const needFull=opts.full||lsGet("prode_fullscan")!==today||cached<20||(today<=GROUPS_END&&groupFix<72);
     let dates;
     if(needFull&&today<=GROUPS_END)dates=dateRange(TOUR_START,clampDate(offsetDay(today,4)>GROUPS_END?offsetDay(today,4):GROUPS_END)); // durante grupos: toda la fase (fija las jornadas por fecha real)
-    else if(needFull)dates=dateRange(clampDate(offsetDay(today,-4)),clampDate(offsetDay(today,4))); // refresco diario fuera de grupos
+    else if(needFull)dates=dateRange("2026-06-28",clampDate(offsetDay(today,4))); // fuera de grupos: desde el inicio de los playoffs hasta hoy+4 (así no se cae ningún cruce de la ventana)
     else dates=dateRange(clampDate(offsetDay(today,-1)),clampDate(offsetDay(today,2)));    // polling: ayer..+2
     for(const d of dates){ingestEvents(await fetchDay(d));if(needFull)await new Promise(r=>setTimeout(r,140));}
     TODAYGAMES.sort((x,y)=>(x.time||"99").localeCompare(y.time||"99"));
@@ -1399,7 +1399,7 @@ function koGridView(p){
     col.forEach((mt,m)=>{
       if(!mt.a||!mt.b)return;
       const key=r+"-"+m;const ks=(p.koScores&&p.koScores[key])||{};
-      const lk=koLocked(mt.a,mt.b,r);const x2on=(p.x2ko===key);
+      const lk=!!mt.winner||koLocked(mt.a,mt.b,r);const x2on=(p.x2ko===key);
       const draw=(ks.a!=null&&ks.b!=null&&Number(ks.a)===Number(ks.b));const gsel=ks.g||"";
       h+=`<div class="kox ${lk?"locked":""} ${x2on?"x2on":""}">
         <div class="koline">
@@ -1845,7 +1845,7 @@ function renderReglas(){
   h+=`<div class="block"><h3>El cuadro, en breve</h3><p class="sub" style="margin:0">El cuadro se arma solo con tus marcadores: pasan los 2 primeros de cada grupo más los 8 mejores terceros (32 equipos), y vos vas eligiendo quién gana cada cruce hasta el campeón.</p></div>`;
   if(ed)h+=participantsBlock();
   if(ed)h+=`<div class="block" style="border-color:var(--amber)"><h3>Zona peligrosa</h3><div class="row"><button class="btn sm" id="resetAll" style="border-color:var(--amber);color:var(--amber)">Borrar todo (jugadores + resultados)</button></div></div>`;
-  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: cuadro oficial FIFA corregido · build 9</div>`;
+  h+=`<div style="text-align:center;color:var(--mut);font-size:11px;margin-top:18px">Versión: ventana playoffs completa · build 11</div>`;
   v.innerHTML=h;
   if(ed){
     wireParticipants(v);
